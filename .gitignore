@@ -1,0 +1,10 @@
+# Flutter gizli dosyaları
+tv_kontrol_mobil/.env
+tv_kontrol_mobil/lib/firebase_options.dart
+
+# Derleme ve önbellek dosyaları
+**/build/
+**/.dart_tool/
+**/.idea/
+**/.vscode/
+*.iml

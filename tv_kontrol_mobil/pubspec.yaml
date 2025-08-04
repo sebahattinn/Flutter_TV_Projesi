@@ -1,0 +1,43 @@
+name: tv_kontrol_mobil
+description: "Android TV Kontrol Uygulaması - MQTT ile Görsel Paylaşımı"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI
+  cupertino_icons: ^1.0.8
+  
+  # Firebase
+  firebase_core: ^3.15.2
+  firebase_storage: ^12.4.10
+  
+  # File Operations
+  file_picker: ^10.2.0
+  
+  # MQTT Communication
+  mqtt_client: ^10.10.0
+  
+  # Environment Variables
+  flutter_dotenv: ^5.2.1
+  
+  # HTTP Requests
+  http: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - .env
+    

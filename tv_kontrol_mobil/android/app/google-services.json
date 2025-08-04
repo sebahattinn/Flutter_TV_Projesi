@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "538967734755",
+    "project_id": "tv-kontrol-mobil",
+    "storage_bucket": "tv-kontrol-mobil.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:538967734755:android:73d4cf1fdc0b09d332c8d6",
+        "android_client_info": {
+          "package_name": "com.example.tv_kontrol_mobil"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvqxoOitNXtJ3vs6mmvZe-SQvReVY__Xg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

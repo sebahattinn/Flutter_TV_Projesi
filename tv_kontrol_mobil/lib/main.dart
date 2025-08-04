@@ -1,0 +1,323 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'gorsel_yukle_sayfasi.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+void main() async {
+  // Widget binding'i başlat
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // .env dosyasını yükle
+    debugPrint("📁 .env dosyası yükleniyor...");
+    await dotenv.load(fileName: ".env");
+    debugPrint("✅ .env dosyası başarıyla yüklendi");
+
+    // Önemli env değişkenlerini kontrol et
+    final imgbbKey = dotenv.env['IMGBB_API_KEY'];
+    final mqttBroker = dotenv.env['MQTT_BROKER'] ?? dotenv.env['MQTT_HOST'];
+
+    if (imgbbKey == null || imgbbKey.isEmpty) {
+      debugPrint("⚠️ IMGBB_API_KEY bulunamadı!");
+    } else {
+      debugPrint("✅ IMGBB_API_KEY mevcut");
+    }
+
+    if (mqttBroker == null || mqttBroker.isEmpty) {
+      debugPrint("⚠️ MQTT_BROKER/MQTT_HOST bulunamadı!");
+    } else {
+      debugPrint("✅ MQTT Broker: $mqttBroker");
+    }
+
+    // Firebase zaten başlatılmış mı kontrol et
+    if (Firebase.apps.isEmpty) {
+      debugPrint("🔥 Firebase başlatılıyor...");
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint("✅ Firebase başarıyla başlatıldı");
+    } else {
+      debugPrint("ℹ️ Firebase zaten başlatılmış");
+    }
+  } catch (e, stack) {
+    debugPrint("❌ Başlatma hatası: $e");
+    debugPrint("📌 Stack: $stack");
+  }
+
+  runApp(const TvKontrolUygulamasi());
+}
+
+class TvKontrolUygulamasi extends StatelessWidget {
+  const TvKontrolUygulamasi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: "📺 TV Kontrol",
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepOrange,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        appBarTheme: AppBarTheme(
+          centerTitle: true,
+          elevation: 2,
+          backgroundColor: Colors.deepOrange.shade600,
+          foregroundColor: Colors.white,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AnaSayfa(),
+        '/gorsel': (context) => const GorselYukleSayfasi(),
+      },
+      // Hata sayfası
+      onUnknownRoute: (settings) =>
+          MaterialPageRoute(builder: (context) => const HataSayfasi()),
+    );
+  }
+}
+
+class AnaSayfa extends StatefulWidget {
+  const AnaSayfa({super.key});
+
+  @override
+  State<AnaSayfa> createState() => _AnaSayfaState();
+}
+
+class _AnaSayfaState extends State<AnaSayfa> {
+  bool _firebaseReady = false;
+  String _durumMesaji = "Kontrol ediliyor...";
+
+  @override
+  void initState() {
+    super.initState();
+    _firebaseKontrol();
+  }
+
+  void _firebaseKontrol() {
+    final firebaseReady = Firebase.apps.isNotEmpty;
+    setState(() {
+      _firebaseReady = firebaseReady;
+      _durumMesaji = firebaseReady
+          ? "✅ Firebase bağlantısı aktif"
+          : "❌ Firebase başlatılamadı!";
+    });
+    debugPrint(
+      firebaseReady ? "✅ Firebase zaten başlatılmış" : "⚠️ Firebase bulunamadı",
+    );
+  }
+
+  void _envKontrol() {
+    final imgbbKey = dotenv.env['IMGBB_API_KEY'];
+    final mqttBroker = dotenv.env['MQTT_BROKER'] ?? dotenv.env['MQTT_HOST'];
+    final mqttPort = dotenv.env['MQTT_PORT'];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("🔧 Yapılandırma Durumu"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ayarSatiri("IMGBB API Key", imgbbKey),
+            _ayarSatiri("MQTT Broker", mqttBroker),
+            _ayarSatiri("MQTT Port", mqttPort),
+            _ayarSatiri("Firebase", _firebaseReady ? "Aktif" : "Hatalı"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Tamam"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ayarSatiri(String baslik, String? deger) {
+    final mevcut = deger != null && deger.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            mevcut ? Icons.check_circle : Icons.error,
+            color: mevcut ? Colors.green : Colors.red,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "$baslik: ${mevcut ? '✅ Mevcut' : '❌ Eksik'}",
+              style: TextStyle(
+                color: mevcut ? Colors.green.shade700 : Colors.red.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("📺 TV Kontrol Uygulaması"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _envKontrol,
+            tooltip: "Yapılandırmayı Kontrol Et",
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.deepOrange.shade50, Colors.white],
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo/Icon
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.deepOrange.shade100,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.tv,
+                    size: 64,
+                    color: Colors.deepOrange.shade600,
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Başlık
+                Text(
+                  "TV Kontrol Sistemi",
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepOrange.shade700,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Durum mesajı
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _firebaseReady ? Icons.check_circle : Icons.error,
+                          color: _firebaseReady ? Colors.green : Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _durumMesaji,
+                          style: TextStyle(
+                            color: _firebaseReady
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Ana buton
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/gorsel');
+                  },
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('📷 Görsel Yükleme Sayfası'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Yapılandırma butonu
+                OutlinedButton.icon(
+                  onPressed: _envKontrol,
+                  icon: const Icon(Icons.settings),
+                  label: const Text('⚙️ Yapılandırmayı Kontrol Et'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepOrange.shade600,
+                    side: BorderSide(color: Colors.deepOrange.shade600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Hata sayfası
+class HataSayfasi extends StatelessWidget {
+  const HataSayfasi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("❌ Hata")),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text(
+              "Sayfa bulunamadı!",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
