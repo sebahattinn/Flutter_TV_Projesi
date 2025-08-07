@@ -11,6 +11,7 @@ import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.URL
 import android.graphics.Color
@@ -23,7 +24,6 @@ class MainActivity : AppCompatActivity() {
     private val serial = "androidtv_001"
     private val brokerUri = "tcp://broker.hivemq.com:1883"
 
-    // ✅ SIMPLE TOPICS to match Flutter
     private val pairTopic = "tv/$serial/pair"
     private val imagesTopic = "tv/$serial/images"
     private val imageTopic = "tv/$serial/image"
@@ -40,6 +40,20 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createUI()
+
+        // ✅ Kayıtlı görseli yükle
+        val prefs = getSharedPreferences("tv_prefs", MODE_PRIVATE)
+        val lastImagePath = prefs.getString("last_image_path", null)
+        if (lastImagePath != null) {
+            val file = File(lastImagePath)
+            if (file.exists()) {
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                imageView.setImageBitmap(bitmap)
+                messageText.text = "📂 Kayıtlı görsel yüklendi"
+                messageText.setTextColor(Color.GREEN)
+            }
+        }
+
         connectToMqtt()
     }
 
@@ -209,9 +223,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val imageFile = File(dir, "image_$index.jpg")
                     if (imageFile.exists()) {
-                        successCount++
-                        downloadedImages.add(imageFile.absolutePath)
-                        return@forEachIndexed
+                        imageFile.delete() // ✅ Önceki dosyayı sil
                     }
 
                     val connection = URL(url).openConnection()
@@ -252,19 +264,39 @@ class MainActivity : AppCompatActivity() {
         if (file.exists()) {
             runOnUiThread {
                 try {
-                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                    val options = BitmapFactory.Options().apply {
+                        inMutable = true
+                        inJustDecodeBounds = false
+                    }
+
+                    val fis = FileInputStream(file)
+                    val bitmap = BitmapFactory.decodeStream(fis, null, options)
+                    fis.close()
+
                     if (bitmap != null) {
                         imageView.setImageBitmap(bitmap)
                         messageText.text = "🖼️ Görsel gösteriliyor: ${index + 1}"
                         messageText.setTextColor(Color.WHITE)
+
+                        getSharedPreferences("tv_prefs", MODE_PRIVATE)
+                            .edit()
+                            .putString("last_image_path", file.absolutePath)
+                            .apply()
                     } else {
-                        messageText.text = "❌ Görsel gösterilemedi"
+                        messageText.text = "❌ Bitmap decode hatası"
                         messageText.setTextColor(Color.RED)
                     }
                 } catch (e: Exception) {
+                    Log.e("IMG", "❌ Gösterim hatası: ${e.message}")
                     messageText.text = "❌ Gösterim hatası"
                     messageText.setTextColor(Color.RED)
                 }
+            }
+        } else {
+            Log.w("IMG", "⚠️ Dosya bulunamadı: image_$index.jpg")
+            runOnUiThread {
+                messageText.text = "⚠️ Görsel dosyası bulunamadı"
+                messageText.setTextColor(Color.YELLOW)
             }
         }
     }
