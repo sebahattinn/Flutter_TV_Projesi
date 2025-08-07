@@ -2,6 +2,8 @@ package com.example.tvimagereceiver
 
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.ImageView
 import android.widget.TextView
@@ -17,6 +19,7 @@ import java.net.URL
 import android.graphics.Color
 import android.view.Gravity
 import android.widget.FrameLayout
+import android.view.View
 
 class MainActivity : AppCompatActivity() {
 
@@ -29,19 +32,24 @@ class MainActivity : AppCompatActivity() {
     private val imageTopic = "tv/$serial/image"
     private val pairResponseTopic = "tv/$serial/pair_response"
 
+    private lateinit var statusOverlay: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var messageText: TextView
     private lateinit var imageView: ImageView
-    private lateinit var containerLayout: LinearLayout
+    private lateinit var mainContainer: FrameLayout
 
     private var isPaired = false
     private var downloadedImages = mutableListOf<String>()
+
+    // Handler for auto-hiding status messages
+    private val hideHandler = Handler(Looper.getMainLooper())
+    private var hideRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createUI()
 
-        // ✅ Kayıtlı görseli yükle
+        // ✅ Load saved image
         val prefs = getSharedPreferences("tv_prefs", MODE_PRIVATE)
         val lastImagePath = prefs.getString("last_image_path", null)
         if (lastImagePath != null) {
@@ -49,8 +57,7 @@ class MainActivity : AppCompatActivity() {
             if (file.exists()) {
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                 imageView.setImageBitmap(bitmap)
-                messageText.text = "📂 Kayıtlı görsel yüklendi"
-                messageText.setTextColor(Color.GREEN)
+                showTemporaryMessage("📂 Kayıtlı görsel yüklendi", Color.GREEN)
             }
         }
 
@@ -58,11 +65,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createUI() {
-        containerLayout = LinearLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        // Main container that fills entire screen
+        mainContainer = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.BLACK)
+        }
+
+        // Image view that fills entire screen
+        imageView = ImageView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.BLACK)
+        }
+
+        // Status overlay that appears on top
+        statusOverlay = LinearLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP
+            )
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#1a1a1a"))
+            setBackgroundColor(Color.parseColor("#CC000000")) // Semi-transparent black
             setPadding(48, 48, 48, 48)
+            visibility = View.VISIBLE
         }
 
         val titleText = TextView(this).apply {
@@ -70,7 +102,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 28f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 32)
+            setPadding(0, 0, 0, 16)
         }
 
         statusText = TextView(this).apply {
@@ -78,7 +110,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 20f
             setTextColor(Color.parseColor("#ffaa00"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 24)
+            setPadding(0, 0, 0, 12)
         }
 
         messageText = TextView(this).apply {
@@ -86,20 +118,53 @@ class MainActivity : AppCompatActivity() {
             textSize = 18f
             setTextColor(Color.parseColor("#cccccc"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 32)
         }
 
-        imageView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setBackgroundColor(Color.parseColor("#333333"))
-        }
+        statusOverlay.addView(titleText)
+        statusOverlay.addView(statusText)
+        statusOverlay.addView(messageText)
 
-        containerLayout.addView(titleText)
-        containerLayout.addView(statusText)
-        containerLayout.addView(messageText)
-        containerLayout.addView(imageView)
-        setContentView(containerLayout)
+        mainContainer.addView(imageView)
+        mainContainer.addView(statusOverlay)
+
+        setContentView(mainContainer)
+    }
+
+    private fun showTemporaryMessage(message: String, color: Int, isStatus: Boolean = false) {
+        runOnUiThread {
+            // Cancel any existing hide timer
+            hideRunnable?.let { hideHandler.removeCallbacks(it) }
+
+            // Show the overlay
+            statusOverlay.visibility = View.VISIBLE
+
+            if (isStatus) {
+                statusText.text = message
+                statusText.setTextColor(color)
+            } else {
+                messageText.text = message
+                messageText.setTextColor(color)
+            }
+
+            // Set up auto-hide after 2 seconds
+            hideRunnable = Runnable {
+                statusOverlay.visibility = View.GONE
+            }
+            hideHandler.postDelayed(hideRunnable!!, 2000)
+        }
+    }
+
+    private fun showPermanentStatus(statusMessage: String, statusColor: Int, message: String, messageColor: Int) {
+        runOnUiThread {
+            // Cancel any existing hide timer for permanent messages
+            hideRunnable?.let { hideHandler.removeCallbacks(it) }
+
+            statusOverlay.visibility = View.VISIBLE
+            statusText.text = statusMessage
+            statusText.setTextColor(statusColor)
+            messageText.text = message
+            messageText.setTextColor(messageColor)
+        }
     }
 
     private fun connectToMqtt() {
@@ -117,10 +182,7 @@ class MainActivity : AppCompatActivity() {
                 mqttClient.setCallback(object : MqttCallback {
                     override fun connectionLost(cause: Throwable?) {
                         Log.e("MQTT", "❌ Bağlantı koptu: ${cause?.message}")
-                        runOnUiThread {
-                            statusText.text = "❌ MQTT Bağlantısı Kesildi"
-                            statusText.setTextColor(Color.RED)
-                        }
+                        showTemporaryMessage("❌ MQTT Bağlantısı Kesildi", Color.RED, true)
                     }
 
                     override fun messageArrived(topic: String?, message: MqttMessage?) {
@@ -146,10 +208,7 @@ class MainActivity : AppCompatActivity() {
                 mqttClient.connect(options)
                 Log.i("MQTT", "✅ MQTT bağlantısı kuruldu: $brokerUri")
 
-                runOnUiThread {
-                    statusText.text = "✅ MQTT Bağlantısı Aktif"
-                    statusText.setTextColor(Color.GREEN)
-                }
+                showTemporaryMessage("✅ MQTT Bağlantısı Aktif", Color.GREEN, true)
 
                 mqttClient.subscribe(pairTopic, 1)
                 mqttClient.subscribe(imagesTopic, 1)
@@ -157,26 +216,19 @@ class MainActivity : AppCompatActivity() {
 
                 Log.d("MQTT", "🔔 Subscribed to topics: \n- $pairTopic\n- $imagesTopic\n- $imageTopic")
 
-                runOnUiThread {
-                    messageText.text = "📲 Pair mesajı bekleniyor..."
-                }
+                showTemporaryMessage("📲 Pair mesajı bekleniyor...", Color.parseColor("#cccccc"))
 
             } catch (e: MqttException) {
                 Log.e("MQTT", "❌ Bağlantı hatası: ${e.message}")
-                runOnUiThread {
-                    statusText.text = "❌ MQTT Hatası: ${e.message}"
-                    statusText.setTextColor(Color.RED)
-                }
+                showTemporaryMessage("❌ MQTT Hatası: ${e.message}", Color.RED, true)
             }
         }.start()
     }
 
     private fun handlePairRequest() {
         isPaired = true
-        runOnUiThread {
-            messageText.text = "✅ Pair işlemi başarılı!"
-            messageText.setTextColor(Color.GREEN)
-        }
+        showTemporaryMessage("✅ Pair işlemi başarılı!", Color.GREEN)
+
         try {
             val responseMessage = "paired_ok"
             mqttClient.publish(pairResponseTopic, responseMessage.toByteArray(), 1, false)
@@ -192,9 +244,7 @@ class MainActivity : AppCompatActivity() {
             val imagesArray = jsonObject.getJSONArray("images")
             val totalImages = jsonObject.optInt("total_images", imagesArray.length())
 
-            runOnUiThread {
-                messageText.text = "📥 $totalImages görsel indiriliyor..."
-            }
+            showTemporaryMessage("📥 $totalImages görsel indiriliyor...", Color.parseColor("#ffaa00"))
 
             val urls = mutableListOf<String>()
             for (i in 0 until imagesArray.length()) {
@@ -206,10 +256,7 @@ class MainActivity : AppCompatActivity() {
 
         } catch (e: Exception) {
             Log.e("MQTT", "❌ JSON parse hatası: ${e.message}")
-            runOnUiThread {
-                messageText.text = "❌ Görsel verisi işlenemedi"
-                messageText.setTextColor(Color.RED)
-            }
+            showTemporaryMessage("❌ Görsel verisi işlenemedi", Color.RED)
         }
     }
 
@@ -223,7 +270,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val imageFile = File(dir, "image_$index.jpg")
                     if (imageFile.exists()) {
-                        imageFile.delete() // ✅ Önceki dosyayı sil
+                        imageFile.delete() // ✅ Delete previous file
                     }
 
                     val connection = URL(url).openConnection()
@@ -244,12 +291,13 @@ class MainActivity : AppCompatActivity() {
 
             runOnUiThread {
                 if (successCount == urls.size) {
-                    messageText.text = "✅ Tüm görseller indirildi!"
-                    messageText.setTextColor(Color.GREEN)
-                    showFirstImage()
+                    showTemporaryMessage("✅ Tüm görseller indirildi!", Color.GREEN)
+                    // Show first image after a short delay
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        showFirstImage()
+                    }, 500)
                 } else {
-                    messageText.text = "⚠️ $successCount/${urls.size} görsel indirildi"
-                    messageText.setTextColor(Color.YELLOW)
+                    showTemporaryMessage("⚠️ $successCount/${urls.size} görsel indirildi", Color.YELLOW)
                 }
             }
         }.start()
@@ -275,35 +323,32 @@ class MainActivity : AppCompatActivity() {
 
                     if (bitmap != null) {
                         imageView.setImageBitmap(bitmap)
-                        messageText.text = "🖼️ Görsel gösteriliyor: ${index + 1}"
-                        messageText.setTextColor(Color.WHITE)
+                        showTemporaryMessage("🖼️ Görsel gösteriliyor: ${index + 1}", Color.WHITE)
 
                         getSharedPreferences("tv_prefs", MODE_PRIVATE)
                             .edit()
                             .putString("last_image_path", file.absolutePath)
                             .apply()
                     } else {
-                        messageText.text = "❌ Bitmap decode hatası"
-                        messageText.setTextColor(Color.RED)
+                        showTemporaryMessage("❌ Bitmap decode hatası", Color.RED)
                     }
                 } catch (e: Exception) {
                     Log.e("IMG", "❌ Gösterim hatası: ${e.message}")
-                    messageText.text = "❌ Gösterim hatası"
-                    messageText.setTextColor(Color.RED)
+                    showTemporaryMessage("❌ Gösterim hatası", Color.RED)
                 }
             }
         } else {
             Log.w("IMG", "⚠️ Dosya bulunamadı: image_$index.jpg")
-            runOnUiThread {
-                messageText.text = "⚠️ Görsel dosyası bulunamadı"
-                messageText.setTextColor(Color.YELLOW)
-            }
+            showTemporaryMessage("⚠️ Görsel dosyası bulunamadı", Color.YELLOW)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         try {
+            // Cancel any pending hide operations
+            hideRunnable?.let { hideHandler.removeCallbacks(it) }
+
             if (::mqttClient.isInitialized && mqttClient.isConnected) {
                 mqttClient.disconnect()
                 Log.d("MQTT", "🔌 MQTT bağlantısı kapatıldı")
