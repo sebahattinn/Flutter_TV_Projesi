@@ -3,6 +3,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'gorsel_yukle_sayfasi.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+<<<<<<< HEAD
+=======
+import 'qr_scanner_screen.dart';
+//import 'mqtt_yardimcisi_io.dart';
+import 'image_sender_screen.dart';
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
 
 void main() async {
   // Widget binding'i başlat
@@ -81,6 +87,20 @@ class TvKontrolUygulamasi extends StatelessWidget {
       routes: {
         '/': (context) => const AnaSayfa(),
         '/gorsel': (context) => const GorselYukleSayfasi(),
+        '/qr_scanner': (context) => const QRScannerScreen(),
+      },
+      // Route generator for dynamic routes
+      onGenerateRoute: (settings) {
+        if (settings.name == '/image_sender') {
+          final args = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => ImageSenderScreen(
+              tvData: args['tvData'],
+              folderName: args['folderName'],
+            ),
+          );
+        }
+        return null;
       },
       // Hata sayfası
       onUnknownRoute: (settings) =>
@@ -96,27 +116,56 @@ class AnaSayfa extends StatefulWidget {
   State<AnaSayfa> createState() => _AnaSayfaState();
 }
 
+<<<<<<< HEAD
 class _AnaSayfaState extends State<AnaSayfa> {
+=======
+class _AnaSayfaState extends State<AnaSayfa>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
   bool _firebaseReady = false;
   String _durumMesaji = "Kontrol ediliyor...";
 
   @override
   void initState() {
     super.initState();
+    _setupAnimations();
     _firebaseKontrol();
+<<<<<<< HEAD
+=======
+  }
+
+  void _setupAnimations() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+    _animationController.forward();
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
   }
 
   void _firebaseKontrol() {
     final firebaseReady = Firebase.apps.isNotEmpty;
     setState(() {
       _firebaseReady = firebaseReady;
-      _durumMesaji = firebaseReady
-          ? "✅ Firebase bağlantısı aktif"
-          : "❌ Firebase başlatılamadı!";
+      _updateDurumMesaji();
     });
     debugPrint(
-      firebaseReady ? "✅ Firebase zaten başlatılmış" : "⚠️ Firebase bulunamadı",
+      firebaseReady ? "✅ Firebase hazır" : "⚠️ Firebase bulunamadı",
     );
+  }
+
+  void _updateDurumMesaji() {
+    if (_firebaseReady) {
+      _durumMesaji = "✅ Sistem hazır";
+    } else {
+      _durumMesaji = "❌ Firebase başlatılamadı!";
+    }
   }
 
   void _envKontrol() {
@@ -128,15 +177,18 @@ class _AnaSayfaState extends State<AnaSayfa> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("🔧 Yapılandırma Durumu"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ayarSatiri("IMGBB API Key", imgbbKey),
-            _ayarSatiri("MQTT Broker", mqttBroker),
-            _ayarSatiri("MQTT Port", mqttPort),
-            _ayarSatiri("Firebase", _firebaseReady ? "Aktif" : "Hatalı"),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ayarSatiri("IMGBB API Key", imgbbKey),
+              _ayarSatiri("MQTT Broker", mqttBroker),
+              _ayarSatiri("MQTT Port", mqttPort),
+              const Divider(),
+              _ayarSatiri("Firebase", _firebaseReady ? "Aktif" : "Hatalı"),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -162,15 +214,22 @@ class _AnaSayfaState extends State<AnaSayfa> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "$baslik: ${mevcut ? '✅ Mevcut' : '❌ Eksik'}",
+              "$baslik: ${mevcut ? (deger.length > 20 ? '${deger.substring(0, 20)}...' : deger) : '❌ Eksik'}",
               style: TextStyle(
                 color: mevcut ? Colors.green.shade700 : Colors.red.shade700,
+                fontSize: 13,
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -194,67 +253,47 @@ class _AnaSayfaState extends State<AnaSayfa> {
             colors: [Colors.deepOrange.shade50, Colors.white],
           ),
         ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo/Icon
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.deepOrange.shade100,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.tv,
-                    size: 64,
-                    color: Colors.deepOrange.shade600,
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Başlık
-                Text(
-                  "TV Kontrol Sistemi",
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepOrange.shade700,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Durum mesajı
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _firebaseReady ? Icons.check_circle : Icons.error,
-                          color: _firebaseReady ? Colors.green : Colors.red,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _durumMesaji,
-                          style: TextStyle(
-                            color: _firebaseReady
-                                ? Colors.green.shade700
-                                : Colors.red.shade700,
-                            fontWeight: FontWeight.w500,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Animated Logo/Icon
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.8, end: 1.0),
+                    duration: const Duration(milliseconds: 600),
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange.shade100,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.deepOrange.withOpacity(0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.tv,
+                            size: 64,
+                            color: Colors.deepOrange.shade600,
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                ),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
+<<<<<<< HEAD
                 // Ana buton
                 ElevatedButton.icon(
                   onPressed: () {
@@ -286,9 +325,98 @@ class _AnaSayfaState extends State<AnaSayfa> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.deepOrange.shade600,
                     side: BorderSide(color: Colors.deepOrange.shade600),
+=======
+                  // Başlık
+                  Text(
+                    "TV Kontrol Sistemi",
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepOrange.shade700,
+                        ),
                   ),
-                ),
-              ],
+
+                  const SizedBox(height: 16),
+
+                  // Durum mesajı kartı
+                  Card(
+                    color: _firebaseReady
+                        ? Colors.green.shade50
+                        : Colors.orange.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _firebaseReady ? Icons.check_circle : Icons.warning,
+                            color:
+                                _firebaseReady ? Colors.green : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              _durumMesaji,
+                              style: TextStyle(
+                                color: _firebaseReady
+                                    ? Colors.green.shade700
+                                    : Colors.orange.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Ana butonlar
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Görsel Yükleme Butonu - This is the only main button now
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/gorsel');
+                        },
+                        icon: const Icon(Icons.photo_library),
+                        label: const Text('📷 Görsel Yükleme Sayfası'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepOrange.shade600,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Yapılandırma butonu
+                      OutlinedButton.icon(
+                        onPressed: _envKontrol,
+                        icon: const Icon(Icons.settings),
+                        label: const Text('⚙️ Yapılandırmayı Kontrol Et'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.deepOrange.shade600,
+                          side: BorderSide(color: Colors.deepOrange.shade600),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -305,15 +433,21 @@ class HataSayfasi extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("❌ Hata")),
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red),
-            SizedBox(height: 16),
-            Text(
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
               "Sayfa bulunamadı!",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushReplacementNamed(context, '/'),
+              icon: const Icon(Icons.home),
+              label: const Text("Ana Sayfaya Dön"),
             ),
           ],
         ),

@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -14,6 +14,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   
   # Firebase
+<<<<<<< HEAD
   firebase_core: ^3.15.2
   firebase_storage: ^12.4.10
   
@@ -28,16 +29,55 @@ dependencies:
   
   # HTTP Requests
   http: ^1.2.1
+=======
+  firebase_core: ^3.5.0
+  firebase_storage: ^12.3.4
+
+  # QR Scanner - REMOVED qr_code_scanner, using mobile_scanner instead
+  mobile_scanner: ^5.2.3
+  
+  # Permissions
+  permission_handler: ^11.3.1
+  
+  # UUID
+  uuid: ^4.5.1
+
+  # Dosya işlemleri
+  file_picker: ^8.1.2
+  image_picker: ^1.1.2
+
+  # MQTT
+  mqtt_client: ^10.5.0
+
+  # HTTP
+  http: ^1.2.2
+
+  # Ortam değişkenleri
+  flutter_dotenv: ^5.2.1
+
+  # Shared Preferences
+  shared_preferences: ^2.3.2
+
+  # Cihaz Bilgisi
+  device_info_plus: ^10.1.2
+
+  # Kriptografi
+  crypto: ^3.0.5
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
   
   # Assets
   assets:
+<<<<<<< HEAD
     - .env
     
+=======
+    - .env
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)

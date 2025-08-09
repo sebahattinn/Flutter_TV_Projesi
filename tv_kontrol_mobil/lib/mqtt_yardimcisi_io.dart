@@ -16,14 +16,14 @@ class MqttYardimcisi {
 
   int get port => int.tryParse(dotenv.env['MQTT_PORT'] ?? '') ?? 1883;
 
-  // ✅ FIXED: Match Android TV topic structure
-  String get topicPrefix => dotenv.env['MQTT_TOPIC_PREFIX'] ?? 'ht/demo/tv/';
+  // Topic configuration
+  String get topicPrefix => dotenv.env['MQTT_TOPIC_PREFIX'] ?? 'tv/';
   String get tvSerial => dotenv.env['TV_SERIAL'] ?? 'androidtv_001';
   String get username => dotenv.env['MQTT_USERNAME'] ?? '';
   String get password => dotenv.env['MQTT_PASSWORD'] ?? '';
   bool get baglantiDurumu => _baglantiDurumu;
 
-  // ✅ FIXED: Topic names now match Android TV exactly
+  // Topic getters
   String get pairTopic => '${topicPrefix}$tvSerial/pair';
   String get pairResponseTopic => '${topicPrefix}$tvSerial/pair_response';
   String get imagesTopic => '${topicPrefix}$tvSerial/images';
@@ -35,45 +35,34 @@ class MqttYardimcisi {
       debugPrint("📡 Broker: $broker:$port");
       debugPrint("📍 Topic prefix: $topicPrefix");
       debugPrint("📱 TV Serial: $tvSerial");
-      debugPrint("🎯 Pair topic: $pairTopic");
-      debugPrint("🎯 Pair response topic: $pairResponseTopic");
-      debugPrint(
-        "🔑 Kullanıcı adı: ${username.isNotEmpty} | Parola: ${password.isNotEmpty}",
-      );
 
       if (broker.isEmpty) {
         throw Exception("MQTT broker adresi boş! .env dosyasını kontrol edin.");
       }
 
-      // ✅ FIX 1: Simpler client ID
       final clientId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
       debugPrint("📛 Client ID: $clientId");
 
       client = MqttServerClient.withPort(broker, clientId, port);
 
-      // ✅ FIX 2: More compatible settings
       client!.setProtocolV311();
       client!.secure = false;
       client!.useWebSocket = false;
       client!.logging(on: kDebugMode);
 
-      // ✅ FIX 3: Increased timeouts
-      client!.connectTimeoutPeriod = 10000; // 10 seconds instead of 5
-      client!.keepAlivePeriod = 60; // 60 seconds instead of 30
+      client!.connectTimeoutPeriod = 10000; // 10 seconds
+      client!.keepAlivePeriod = 60; // 60 seconds
 
-      // ✅ FIX 4: Disable auto-reconnect initially
-      client!.autoReconnect = false;
-      client!.resubscribeOnAutoReconnect = false;
+      client!.autoReconnect = true;
+      client!.resubscribeOnAutoReconnect = true;
 
       client!.onConnected = _onConnected;
       client!.onDisconnected = _onDisconnected;
 
-      // ✅ FIX 5: Simplified connection message
       final connMessage = MqttConnectMessage()
           .withClientIdentifier(clientId)
-          .startClean(); // Remove .withWillQos() for now
+          .startClean();
 
-      // Only add auth if both username and password exist
       if (username.isNotEmpty && password.isNotEmpty) {
         connMessage.authenticateAs(username, password);
         debugPrint("🔐 Kimlik doğrulama bilgileri eklendi.");
@@ -90,13 +79,6 @@ class MqttYardimcisi {
       if (status?.state == MqttConnectionState.connected) {
         _baglantiDurumu = true;
         debugPrint("✅ MQTT bağlantısı başarılı!");
-
-        // ✅ FIXED: Subscribe to pair response topic immediately
-        await pairResponseTopicDinle();
-
-        // ✅ FIX 6: Re-enable auto-reconnect after successful connection
-        client!.autoReconnect = true;
-        client!.resubscribeOnAutoReconnect = true;
       } else {
         _baglantiDurumu = false;
         final state = status?.state ?? 'unknown';
@@ -113,51 +95,46 @@ class MqttYardimcisi {
     }
   }
 
-  // ✅ NEW: Subscribe to pair response topic
-  Future<void> pairResponseTopicDinle() async {
+  // Generic message sending method
+  Future<void> mesajGonder(String topic, String message) async {
     if (!_baglantiDurumu || client == null) {
-      debugPrint("❌ MQTT bağlantısı yok, pair response dinlenemiyor.");
+      debugPrint("❌ MQTT bağlantısı yok, mesaj gönderilemez.");
       return;
     }
 
     try {
-      client!.subscribe(pairResponseTopic, MqttQos.atLeastOnce);
-      debugPrint("👂 Pair response topic dinleniyor: $pairResponseTopic");
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(message);
 
-      client!.updates!.listen((
-        List<MqttReceivedMessage<MqttMessage>> messages,
-      ) {
-        final message = messages[0].payload as MqttPublishMessage;
-        final payload = MqttPublishPayload.bytesToStringAsString(
-          message.payload.message,
+      final messageId = client!.publishMessage(
+        topic,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+      );
+
+      if (messageId > 0) {
+        debugPrint(
+          "✅ Mesaj gönderildi -> Topic: $topic | Message ID: $messageId",
         );
-        final topic = messages[0].topic;
-
-        debugPrint("📨 Mesaj alındı -> Topic: $topic");
-        debugPrint("📄 Payload: $payload");
-
-        if (topic == pairResponseTopic) {
-          debugPrint("🎉 [PAIR] Pair response alındı: $payload");
-          // Handle pair response here
-          _handlePairResponse(payload);
-        }
-      });
+        debugPrint("📄 Mesaj içeriği: $message");
+      } else {
+        debugPrint("❌ Mesaj gönderilemedi. Message ID: $messageId");
+      }
     } catch (e) {
-      debugPrint("🚨 [PAIR] Pair response dinleme hatası: $e");
+      debugPrint("🚨 Mesaj gönderim hatası: $e");
     }
   }
 
-  void _handlePairResponse(String payload) {
-    if (payload.toLowerCase().contains('paired_ok') ||
-        payload.toLowerCase().contains('success')) {
-      debugPrint("✅ [PAIR] TV ile eşleşme başarılı!");
-      // You can add callback here to notify UI
-    } else {
-      debugPrint("❌ [PAIR] TV eşleşme başarısız: $payload");
-    }
-  }
-
+<<<<<<< HEAD
   Future<void> pairGonder() async {
+=======
+  // Pair gönderme - QR kod tarandıktan sonra kullanılır
+  Future<void> pairGonder({
+    required String token,
+    required String folderName,
+    String deviceInfo = "Flutter Mobile",
+  }) async {
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
     debugPrint("📢 [PAIR] pairGonder() fonksiyonu çağrıldı");
     debugPrint("📍 [PAIR] Pair topic: $pairTopic");
     debugPrint("📍 [PAIR] MQTT bağlantı durumu: $_baglantiDurumu");
@@ -171,12 +148,34 @@ class MqttYardimcisi {
     }
 
     try {
+<<<<<<< HEAD
       final builder = MqttClientPayloadBuilder();
       builder.addString('pair');
 
       final payload = builder.payload;
       debugPrint(
         "📦 [PAIR] Payload oluşturuldu: ${utf8.decode(payload ?? [])}",
+=======
+      final payloadMap = {
+        "action": "pair",
+        "token": token,
+        "folder_name": folderName,
+        "device_info": deviceInfo,
+        "timestamp": DateTime.now().millisecondsSinceEpoch,
+      };
+
+      final jsonString = jsonEncode(payloadMap);
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(jsonString);
+
+      debugPrint("📦 [PAIR] JSON payload: $jsonString");
+      debugPrint("📨 [PAIR] Topic: $pairTopic");
+
+      final messageId = client!.publishMessage(
+        pairTopic,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+>>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
       );
 
       final messageId = client!.publishMessage(
@@ -202,7 +201,11 @@ class MqttYardimcisi {
     }
   }
 
-  Future<void> jsonGonder(List<String> urlListesi) async {
+  // Image URL'lerini JSON olarak gönder
+  Future<void> jsonGonder(
+    List<String> urlListesi, [
+    String? customTvSerial,
+  ]) async {
     if (!_baglantiDurumu || client == null) {
       throw Exception('MQTT bağlantısı yok, json gönderilemez.');
     }
@@ -213,11 +216,14 @@ class MqttYardimcisi {
     }
 
     try {
+      final targetSerial = customTvSerial ?? tvSerial;
+      final targetTopic = '${topicPrefix}$targetSerial/images';
+
       final now = DateTime.now();
       final payload = {
         "timestamp": now.toIso8601String(),
         "total_images": urlListesi.length,
-        "tv_serial": tvSerial,
+        "tv_serial": targetSerial,
         "device_info": {
           "platform": Platform.operatingSystem,
           "version": Platform.operatingSystemVersion,
@@ -236,15 +242,13 @@ class MqttYardimcisi {
 
       final jsonString = jsonEncode(payload);
       debugPrint("📦 JSON oluşturuldu, karakter sayısı: ${jsonString.length}");
-      debugPrint(
-        "📨 Images Topic: $imagesTopic",
-      ); // ✅ FIXED: Now uses correct topic
+      debugPrint("📨 Images Topic: $targetTopic");
 
       final builder = MqttClientPayloadBuilder();
-      builder.addUTF8String(jsonString);
+      builder.addString(jsonString);
 
       final messageId = client!.publishMessage(
-        imagesTopic, // ✅ FIXED: Now uses the correct topic
+        targetTopic,
         MqttQos.atLeastOnce,
         builder.payload!,
       );
@@ -262,25 +266,30 @@ class MqttYardimcisi {
     }
   }
 
-  // ✅ NEW: Send image index to show specific image on TV
-  Future<void> imageIndexGonder(int index) async {
+  // Belirli bir görsel index'ini gönder (TV'de gösterilecek görsel)
+  Future<void> imageIndexGonder(int index, [String? customTvSerial]) async {
     if (!_baglantiDurumu || client == null) {
       debugPrint("❌ MQTT bağlantısı yok, image index gönderilemez.");
       return;
     }
 
     try {
+      final targetSerial = customTvSerial ?? tvSerial;
+      final targetTopic = '${topicPrefix}$targetSerial/image';
+
       final builder = MqttClientPayloadBuilder();
       builder.addString(index.toString());
 
       final messageId = client!.publishMessage(
-        imageTopic,
+        targetTopic,
         MqttQos.atLeastOnce,
         builder.payload!,
       );
 
       if (messageId > 0) {
-        debugPrint("✅ Image index gönderildi: $index (Message ID: $messageId)");
+        debugPrint(
+          "✅ Image index gönderildi: $index -> Topic: $targetTopic (Message ID: $messageId)",
+        );
       } else {
         debugPrint("❌ Image index gönderilemedi. Message ID: $messageId");
       }
@@ -289,30 +298,12 @@ class MqttYardimcisi {
     }
   }
 
-  Future<void> tekUrlGonder(String url) async {
-    await jsonGonder([url]);
+  // Tek URL gönder
+  Future<void> tekUrlGonder(String url, [String? customTvSerial]) async {
+    await jsonGonder([url], customTvSerial);
   }
 
-  void baglantiKapat() {
-    try {
-      if (client != null) {
-        debugPrint("🔌 MQTT bağlantısı kapatılıyor...");
-        client!.disconnect();
-        _baglantiDurumu = false;
-        debugPrint("✅ MQTT bağlantısı kapatıldı.");
-      }
-    } catch (e) {
-      debugPrint("⚠️ MQTT bağlantı kapatma hatası: $e");
-    }
-  }
-
-  bool baglantiKontrol() {
-    final connected =
-        client?.connectionStatus?.state == MqttConnectionState.connected;
-    _baglantiDurumu = connected;
-    return connected;
-  }
-
+  // Topic dinleme (pair response vs. için)
   void topicDinle(String topic, Function(String) onMessage) {
     if (!_baglantiDurumu || client == null) {
       debugPrint("❌ MQTT bağlantısı yok, $topic dinlenemiyor.");
@@ -327,13 +318,40 @@ class MqttYardimcisi {
       final payload = MqttPublishPayload.bytesToStringAsString(
         message.payload.message,
       );
+      final receivedTopic = messages[0].topic;
 
-      debugPrint("📨 Mesaj alındı -> Topic: ${messages[0].topic}");
+      debugPrint("📨 Mesaj alındı -> Topic: $receivedTopic");
       debugPrint("📄 Payload: $payload");
-      onMessage(payload);
+
+      if (receivedTopic == topic) {
+        onMessage(payload);
+      }
     });
   }
 
+  // Bağlantıyı kapat
+  void baglantiKapat() {
+    try {
+      if (client != null) {
+        debugPrint("🔌 MQTT bağlantısı kapatılıyor...");
+        client!.disconnect();
+        _baglantiDurumu = false;
+        debugPrint("✅ MQTT bağlantısı kapatıldı.");
+      }
+    } catch (e) {
+      debugPrint("⚠️ MQTT bağlantı kapatma hatası: $e");
+    }
+  }
+
+  // Bağlantı durumunu kontrol et
+  bool baglantiKontrol() {
+    final connected =
+        client?.connectionStatus?.state == MqttConnectionState.connected;
+    _baglantiDurumu = connected;
+    return connected;
+  }
+
+  // Callback fonksiyonları
   void _onConnected() {
     debugPrint("🎉 MQTT bağlantısı başarılı! (onConnected)");
     _baglantiDurumu = true;
@@ -344,6 +362,7 @@ class MqttYardimcisi {
     _baglantiDurumu = false;
   }
 
+  // Debug bilgilerini yazdır
   void debugBilgileri() {
     debugPrint("📋 MQTT Yapılandırma Detayları:");
     debugPrint("  Broker: $broker:$port");
@@ -358,5 +377,10 @@ class MqttYardimcisi {
     debugPrint(
       "  Bağlantı durumu: ${_baglantiDurumu ? 'Bağlı' : 'Bağlı değil'}",
     );
+
+    if (client != null) {
+      debugPrint("  Client ID: ${client!.clientIdentifier}");
+      debugPrint("  Connection Status: ${client!.connectionStatus?.state}");
+    }
   }
 }
