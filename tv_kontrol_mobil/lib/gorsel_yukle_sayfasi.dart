@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'mqtt_yardimcisi_stub.dart';
+import 'qr_scanner_screen.dart';
 
 class GorselYukleSayfasi extends StatefulWidget {
   const GorselYukleSayfasi({super.key});
@@ -98,24 +99,13 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-<<<<<<< HEAD
-  // YENİ: Pair işlemi
-  Future<void> pairIslemi() async {
-=======
   Future<void> pairWithTV() async {
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
     setState(() {
       mqttGonderiyor = true;
       sonDurum = "🔌 Starting TV pairing...";
     });
 
     try {
-<<<<<<< HEAD
-      debugPrint("📡 Pair işlemi başlatılıyor...");
-
-      // MQTT bağlantısını kur
-      setState(() => sonDurum = "🔌 MQTT broker'a bağlanılıyor...");
-=======
       // 1. Open QR scanner
       final qrData = await Navigator.push(
         context,
@@ -140,7 +130,6 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       // 3. Connect to MQTT
       setState(() => sonDurum = "🔌 Connecting to MQTT broker...");
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
       await _mqtt!.baglantiKur();
 
       if (!_mqtt!.baglantiDurumu) {
@@ -153,34 +142,6 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       final responseTopic = 'tv/$tvSerial/pair_response';
       bool responseReceived = false;
 
-<<<<<<< HEAD
-      // Kısa bir bekleme
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Pair response dinleme topic'ini ayarla
-      final responseTopic =
-          '${_mqtt!.topicPrefix}${_mqtt!.tvSerial}/pair_response';
-
-      // Pair response dinlemeye başla
-      _mqtt!.topicDinle(responseTopic, (message) {
-        debugPrint("📨 Pair response alındı: $message");
-        if (message.toLowerCase().contains('paired') ||
-            message.toLowerCase().contains('ok')) {
-          setState(() {
-            pairDurumu = true;
-            sonDurum = "✅ Android TV ile eşleşme tamamlandı!";
-          });
-
-          // Başarılı pair bildirim
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("✅ Android TV ile eşleşme başarılı!"),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-=======
       _mqtt!.topicDinle(responseTopic, (message) {
         debugPrint("📨 Pair response received: $message");
 
@@ -203,35 +164,12 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
                 ),
               );
             }
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
           }
         } catch (e) {
           debugPrint("Error parsing response: $e");
         }
       });
 
-<<<<<<< HEAD
-      // Pair mesajını gönder
-      setState(
-        () => sonDurum = "📨 Android TV'ye eşleşme isteği gönderiliyor...",
-      );
-      await _mqtt!.pairGonder();
-
-      // 10 saniye bekle pair response için
-      bool responseAlindi = false;
-      for (int i = 0; i < 10; i++) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (pairDurumu) {
-          responseAlindi = true;
-          break;
-        }
-        setState(
-          () => sonDurum = "⏳ Android TV response bekleniyor... (${10 - i}s)",
-        );
-      }
-
-      if (!responseAlindi && !pairDurumu) {
-=======
       // 5. Send pairing request
       setState(() => sonDurum = "📨 Sending pairing request to TV...");
 
@@ -253,7 +191,6 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       }
 
       if (!responseReceived) {
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
         setState(() {
           sonDurum = "⚠️ No response from TV. Is the TV app running?";
           pairDurumu = false;

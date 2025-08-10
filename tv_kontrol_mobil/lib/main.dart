@@ -3,12 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'gorsel_yukle_sayfasi.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-<<<<<<< HEAD
-=======
-import 'qr_scanner_screen.dart';
-//import 'mqtt_yardimcisi_io.dart';
-import 'image_sender_screen.dart';
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
 
 void main() async {
   // Widget binding'i başlat
@@ -83,25 +77,7 @@ class TvKontrolUygulamasi extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const AnaSayfa(),
-        '/gorsel': (context) => const GorselYukleSayfasi(),
-        '/qr_scanner': (context) => const QRScannerScreen(),
-      },
-      // Route generator for dynamic routes
-      onGenerateRoute: (settings) {
-        if (settings.name == '/image_sender') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => ImageSenderScreen(
-              tvData: args['tvData'],
-              folderName: args['folderName'],
-            ),
-          );
-        }
-        return null;
-      },
+      home: const AnaSayfa(),
       // Hata sayfası
       onUnknownRoute: (settings) =>
           MaterialPageRoute(builder: (context) => const HataSayfasi()),
@@ -116,15 +92,10 @@ class AnaSayfa extends StatefulWidget {
   State<AnaSayfa> createState() => _AnaSayfaState();
 }
 
-<<<<<<< HEAD
-class _AnaSayfaState extends State<AnaSayfa> {
-=======
 class _AnaSayfaState extends State<AnaSayfa>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
   bool _firebaseReady = false;
   String _durumMesaji = "Kontrol ediliyor...";
 
@@ -133,8 +104,6 @@ class _AnaSayfaState extends State<AnaSayfa>
     super.initState();
     _setupAnimations();
     _firebaseKontrol();
-<<<<<<< HEAD
-=======
   }
 
   void _setupAnimations() {
@@ -146,7 +115,6 @@ class _AnaSayfaState extends State<AnaSayfa>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
     _animationController.forward();
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
   }
 
   void _firebaseKontrol() {
@@ -293,39 +261,6 @@ class _AnaSayfaState extends State<AnaSayfa>
 
                   const SizedBox(height: 32),
 
-<<<<<<< HEAD
-                // Ana buton
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/gorsel');
-                  },
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('📷 Görsel Yükleme Sayfası'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Yapılandırma butonu
-                OutlinedButton.icon(
-                  onPressed: _envKontrol,
-                  icon: const Icon(Icons.settings),
-                  label: const Text('⚙️ Yapılandırmayı Kontrol Et'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.deepOrange.shade600,
-                    side: BorderSide(color: Colors.deepOrange.shade600),
-=======
                   // Başlık
                   Text(
                     "TV Kontrol Sistemi",
@@ -378,7 +313,12 @@ class _AnaSayfaState extends State<AnaSayfa>
                       // Görsel Yükleme Butonu - This is the only main button now
                       ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.pushNamed(context, '/gorsel');
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    const GorselYukleSayfasi()),
+                          );
                         },
                         icon: const Icon(Icons.photo_library),
                         label: const Text('📷 Görsel Yükleme Sayfası'),
@@ -413,7 +353,6 @@ class _AnaSayfaState extends State<AnaSayfa>
                         ),
                       ),
                     ],
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
                   ),
                 ],
               ),

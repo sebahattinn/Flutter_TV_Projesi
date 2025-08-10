@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.tvimagereceiver"
-    compileSdk = 34
+    compileSdk = 35  // UPDATED: Changed from 34 to 35 to fix the AAR metadata errors
 
     defaultConfig {
         applicationId = "com.example.tvimagereceiver"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 34  // Keep targetSdk at 34 for stability
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -56,7 +56,6 @@ android {
 }
 
 dependencies {
-<<<<<<< HEAD
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(platform(libs.androidx.compose.bom))
@@ -67,13 +66,12 @@ dependencies {
     implementation(libs.androidx.tv.material)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-=======
+
     // Core AndroidX
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
 
     // TV UI (Leanback)
     implementation("androidx.leanback:leanback:1.1.0-rc02")

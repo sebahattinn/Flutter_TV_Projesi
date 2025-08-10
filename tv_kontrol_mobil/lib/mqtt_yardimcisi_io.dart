@@ -59,9 +59,8 @@ class MqttYardimcisi {
       client!.onConnected = _onConnected;
       client!.onDisconnected = _onDisconnected;
 
-      final connMessage = MqttConnectMessage()
-          .withClientIdentifier(clientId)
-          .startClean();
+      final connMessage =
+          MqttConnectMessage().withClientIdentifier(clientId).startClean();
 
       if (username.isNotEmpty && password.isNotEmpty) {
         connMessage.authenticateAs(username, password);
@@ -125,16 +124,12 @@ class MqttYardimcisi {
     }
   }
 
-<<<<<<< HEAD
-  Future<void> pairGonder() async {
-=======
   // Pair gönderme - QR kod tarandıktan sonra kullanılır
   Future<void> pairGonder({
     required String token,
     required String folderName,
     String deviceInfo = "Flutter Mobile",
   }) async {
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
     debugPrint("📢 [PAIR] pairGonder() fonksiyonu çağrıldı");
     debugPrint("📍 [PAIR] Pair topic: $pairTopic");
     debugPrint("📍 [PAIR] MQTT bağlantı durumu: $_baglantiDurumu");
@@ -148,14 +143,6 @@ class MqttYardimcisi {
     }
 
     try {
-<<<<<<< HEAD
-      final builder = MqttClientPayloadBuilder();
-      builder.addString('pair');
-
-      final payload = builder.payload;
-      debugPrint(
-        "📦 [PAIR] Payload oluşturuldu: ${utf8.decode(payload ?? [])}",
-=======
       final payloadMap = {
         "action": "pair",
         "token": token,
@@ -175,13 +162,6 @@ class MqttYardimcisi {
         pairTopic,
         MqttQos.atLeastOnce,
         builder.payload!,
->>>>>>> ce41075 (AndroidTV'de qr kodlu güvenlik sistemi sağlandı akabinde çoklu görsel iletimi ve 1,2,3,4 gibi kumanda tuşları ile aralarında geçiş sağlandı gereksiz buton widget'ları kaldırıldı proje daha sağlıklı hale getirildi.)
-      );
-
-      final messageId = client!.publishMessage(
-        pairTopic, // ✅ FIXED: Now uses the correct topic
-        MqttQos.atLeastOnce,
-        payload!,
       );
 
       if (messageId <= 0) {
