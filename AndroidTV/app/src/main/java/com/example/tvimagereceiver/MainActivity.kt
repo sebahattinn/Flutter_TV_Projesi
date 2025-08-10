@@ -33,6 +33,9 @@ class MainActivity : Activity() {
         private const val TAG = "TV_RECEIVER"
         private const val BROKER_URI = "tcp://broker.hivemq.com:1883"
         private const val AUTO_HIDE_DELAY = 2000L // 2 seconds
+        private const val PREFS_NAME = "tv_prefs"
+        private const val KEY_SAVED_IMAGES = "saved_images"
+        private const val KEY_CURRENT_INDEX = "current_image_index"
     }
 
     // MQTT Client
@@ -65,6 +68,7 @@ class MainActivity : Activity() {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private val handler = Handler(Looper.getMainLooper())
     private var hideRunnable: Runnable? = null
+    private var isShowingQRCode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,23 +81,117 @@ class MainActivity : Activity() {
             imageTopic = "tv/$serial/image"
             pairResponseTopic = "tv/$serial/pair_response"
 
-            // Generate pairing code
-            pairingCode = generatePairingCode()
-
             // Setup UI
             createUI()
 
-            // Generate QR code
-            generateQRCode()
+            // Load saved images from SharedPreferences
+            loadSavedImages()
 
-            // Connect to MQTT
+            // Check if we have saved images
+            if (downloadedImages.isNotEmpty()) {
+                // Show saved images directly
+                showSavedImagesMode()
+                // Show the last viewed image
+                showImage(currentImageIndex)
+            } else {
+                // No saved images, show QR code for first time setup
+                showQRCodeMode()
+            }
+
+            // Connect to MQTT (always connect for receiving new images)
             connectToMqtt()
-
-            // Start auto-hide timer for initial display
-            startAutoHideTimer()
 
         } catch (e: Exception) {
             Log.e(TAG, "onCreate error: ${e.message}", e)
+        }
+    }
+
+    private fun loadSavedImages() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val savedImagesStr = prefs.getString(KEY_SAVED_IMAGES, null)
+        currentImageIndex = prefs.getInt(KEY_CURRENT_INDEX, 0)
+
+        if (!savedImagesStr.isNullOrEmpty()) {
+            val paths = savedImagesStr.split(",")
+            downloadedImages.clear()
+
+            // Verify each file still exists
+            paths.forEach { path ->
+                if (File(path).exists()) {
+                    downloadedImages.add(path)
+                    Log.d(TAG, "Loaded saved image: $path")
+                }
+            }
+
+            // Adjust current index if needed
+            if (currentImageIndex >= downloadedImages.size) {
+                currentImageIndex = 0
+            }
+
+            Log.d(TAG, "Loaded ${downloadedImages.size} saved images")
+        }
+    }
+
+    private fun saveImagesToPreferences() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val editor = prefs.edit()
+
+        if (downloadedImages.isNotEmpty()) {
+            val imagesStr = downloadedImages.joinToString(",")
+            editor.putString(KEY_SAVED_IMAGES, imagesStr)
+            editor.putInt(KEY_CURRENT_INDEX, currentImageIndex)
+            Log.d(TAG, "Saved ${downloadedImages.size} images to preferences")
+        } else {
+            editor.remove(KEY_SAVED_IMAGES)
+            editor.remove(KEY_CURRENT_INDEX)
+        }
+
+        editor.apply()
+    }
+
+    private fun showQRCodeMode() {
+        isShowingQRCode = true
+
+        // Generate new pairing code
+        pairingCode = generatePairingCode()
+
+        runOnUiThread {
+            // Show QR code elements
+            qrImageView.visibility = View.VISIBLE
+            imageView.visibility = View.GONE
+            infoLayout.visibility = View.VISIBLE
+
+            // Update texts for QR mode
+            titleText.text = "📺 Android TV Image Receiver"
+            statusText.text = if (mqttClient?.isConnected == true) "Connected" else "Connecting..."
+            statusText.setTextColor(if (mqttClient?.isConnected == true) Color.GREEN else Color.YELLOW)
+            instructionText.text = "Scan QR code with mobile app"
+            messageText.text = "Waiting for pairing..."
+            messageText.setTextColor(Color.GRAY)
+            imageCountText.visibility = View.GONE
+
+            // Generate QR code
+            generateQRCode()
+        }
+    }
+
+    private fun showSavedImagesMode() {
+        isShowingQRCode = false
+        isPaired = true // Consider as paired if we have saved images
+
+        runOnUiThread {
+            // Hide QR code, show images
+            qrImageView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
+
+            // Update instructions
+            instructionText.text = "Press MENU or M to upload new images\nUse 1-9 or arrows to navigate"
+            messageText.text = "Showing saved images (${downloadedImages.size} total)"
+            messageText.setTextColor(Color.GREEN)
+            imageCountText.visibility = View.VISIBLE
+
+            // Auto-hide info after showing
+            startAutoHideTimer()
         }
     }
 
@@ -102,7 +200,7 @@ class MainActivity : Activity() {
     }
 
     private fun getOrCreateSerial(): String {
-        val prefs = getSharedPreferences("tv_prefs", MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         return prefs.getString("serial", null) ?: run {
             val newSerial = "TV_${UUID.randomUUID().toString().take(8).uppercase()}"
             prefs.edit().putString("serial", newSerial).apply()
@@ -127,7 +225,7 @@ class MainActivity : Activity() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
-            scaleType = ImageView.ScaleType.CENTER_CROP // This will fill the screen
+            scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.BLACK)
             visibility = View.GONE
         }
@@ -139,7 +237,7 @@ class MainActivity : Activity() {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#CC000000")) // Semi-transparent black
+            setBackgroundColor(Color.parseColor("#CC000000"))
             setPadding(40, 40, 40, 40)
             gravity = Gravity.CENTER
         }
@@ -199,7 +297,7 @@ class MainActivity : Activity() {
             setPadding(0, 20, 0, 20)
         }
 
-        // Image count text (shows which image is displayed)
+        // Image count text
         imageCountText = TextView(this).apply {
             text = ""
             textSize = 14f
@@ -225,10 +323,28 @@ class MainActivity : Activity() {
         setContentView(containerLayout)
     }
 
-    // Handle keyboard input for image switching
+    // Handle keyboard input for image switching and menu
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Only handle keys when paired and images are available
-        if (isPaired && downloadedImages.isNotEmpty()) {
+        // Handle MENU key or M key to show QR code for new upload
+        when (keyCode) {
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_M -> {
+                if (!isShowingQRCode) {
+                    showQRCodeMode()
+                    return true
+                }
+            }
+            // ESC or BACK to exit QR mode and return to images
+            KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BACK -> {
+                if (isShowingQRCode && downloadedImages.isNotEmpty()) {
+                    showSavedImagesMode()
+                    showImage(currentImageIndex)
+                    return true
+                }
+            }
+        }
+
+        // Only handle image navigation keys when we have images and not showing QR
+        if (!isShowingQRCode && downloadedImages.isNotEmpty()) {
             when (keyCode) {
                 KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
                     showImageByNumber(0)
@@ -293,6 +409,7 @@ class MainActivity : Activity() {
         if (index < downloadedImages.size) {
             currentImageIndex = index
             showImage(currentImageIndex)
+            saveImagesToPreferences() // Save current index
             Log.d(TAG, "Switched to image ${index + 1} via keyboard")
         } else {
             Log.d(TAG, "Image ${index + 1} not available (only ${downloadedImages.size} images)")
@@ -307,6 +424,7 @@ class MainActivity : Activity() {
         if (downloadedImages.isNotEmpty()) {
             currentImageIndex = (currentImageIndex + 1) % downloadedImages.size
             showImage(currentImageIndex)
+            saveImagesToPreferences() // Save current index
             Log.d(TAG, "Showing next image: ${currentImageIndex + 1}")
         }
     }
@@ -319,6 +437,7 @@ class MainActivity : Activity() {
                 downloadedImages.size - 1
             }
             showImage(currentImageIndex)
+            saveImagesToPreferences() // Save current index
             Log.d(TAG, "Showing previous image: ${currentImageIndex + 1}")
         }
     }
@@ -339,7 +458,7 @@ class MainActivity : Activity() {
 
         // Create new timer
         hideRunnable = Runnable {
-            if (isPaired) {
+            if (isPaired && !isShowingQRCode) {
                 // Hide info layout when paired and showing images
                 infoLayout.visibility = View.GONE
             }
@@ -407,7 +526,9 @@ class MainActivity : Activity() {
                         runOnUiThread {
                             statusText.text = "Disconnected"
                             statusText.setTextColor(Color.RED)
-                            showInfoTemporarily() // Show info and auto-hide
+                            if (!isShowingQRCode) {
+                                showInfoTemporarily()
+                            }
                         }
                         // Reconnect after delay
                         scope.launch {
@@ -442,7 +563,9 @@ class MainActivity : Activity() {
                 withContext(Dispatchers.Main) {
                     statusText.text = "Connected"
                     statusText.setTextColor(Color.GREEN)
-                    showInfoTemporarily() // Show info and auto-hide
+                    if (!isShowingQRCode) {
+                        showInfoTemporarily()
+                    }
                 }
 
                 Log.i(TAG, "MQTT Connected")
@@ -452,7 +575,9 @@ class MainActivity : Activity() {
                 withContext(Dispatchers.Main) {
                     statusText.text = "Connection Error"
                     statusText.setTextColor(Color.RED)
-                    showInfoTemporarily() // Show info and auto-hide
+                    if (!isShowingQRCode) {
+                        showInfoTemporarily()
+                    }
                 }
                 delay(5000)
                 connectToMqtt()
@@ -468,13 +593,14 @@ class MainActivity : Activity() {
 
             if (action == "pair" && code == pairingCode) {
                 isPaired = true
+                isShowingQRCode = false
 
                 runOnUiThread {
                     qrImageView.visibility = View.GONE
                     imageView.visibility = View.VISIBLE
-                    messageText.text = "Paired Successfully!"
+                    messageText.text = "Paired Successfully! Waiting for images..."
                     messageText.setTextColor(Color.GREEN)
-                    instructionText.text = "Use number keys 1-9 to switch images\nArrow keys: Navigate | Space: Toggle info"
+                    instructionText.text = "Images will be received shortly..."
                     imageCountText.visibility = View.VISIBLE
 
                     // Auto-hide after showing pairing success
@@ -506,7 +632,7 @@ class MainActivity : Activity() {
 
             runOnUiThread {
                 messageText.text = "Downloading ${images.length()} images..."
-                showInfoTemporarily() // Show info and auto-hide
+                showInfoTemporarily()
             }
 
             scope.launch(Dispatchers.IO) {
@@ -521,10 +647,15 @@ class MainActivity : Activity() {
 
                 withContext(Dispatchers.Main) {
                     if (downloadedImages.isNotEmpty()) {
+                        // Save images to preferences
+                        saveImagesToPreferences()
+
+                        // Show images mode
+                        showSavedImagesMode()
                         showImage(0)
-                        messageText.text = "${downloadedImages.size} images ready"
-                        instructionText.text = "Press 1-${minOf(downloadedImages.size, 9)} to switch images"
-                        // Info will auto-hide after 2 seconds
+
+                        messageText.text = "${downloadedImages.size} new images received"
+                        instructionText.text = "Press 1-${minOf(downloadedImages.size, 9)} to switch images\nPress MENU or M to upload new images"
                     }
                 }
             }
@@ -558,6 +689,7 @@ class MainActivity : Activity() {
         val index = payload.toIntOrNull() ?: 0
         currentImageIndex = index
         showImage(index)
+        saveImagesToPreferences() // Save current index
     }
 
     private fun showImage(index: Int) {
@@ -587,6 +719,8 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Save current state before destroying
+        saveImagesToPreferences()
         scope.cancel()
         hideRunnable?.let { handler.removeCallbacks(it) }
         try {
