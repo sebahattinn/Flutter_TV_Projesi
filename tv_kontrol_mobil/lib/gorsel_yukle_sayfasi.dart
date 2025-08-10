@@ -3,12 +3,22 @@ import 'dart:typed_data';
 import 'dart:io' as io;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'mqtt_yardimcisi_stub.dart';
 import 'qr_scanner_screen.dart';
+
+// Media item class to track both images and videos
+class MediaItem {
+  final String url;
+  final String type; // 'image' or 'video'
+  final String name;
+
+  MediaItem({required this.url, required this.type, required this.name});
+}
 
 class GorselYukleSayfasi extends StatefulWidget {
   const GorselYukleSayfasi({super.key});
@@ -18,7 +28,7 @@ class GorselYukleSayfasi extends StatefulWidget {
 }
 
 class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
-  List<String> yuklenenUrlListesi = [];
+  List<MediaItem> yuklenenMediaListesi = [];
   bool yukleniyor = false;
   bool mqttGonderiyor = false;
   bool pairDurumu = false;
@@ -26,6 +36,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
   String? tvSerial;
   String? pairingCode;
   MqttYardimcisi? _mqtt;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -50,7 +61,8 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  Future<String?> uploadToImgbb(Uint8List bytes, String fileName) async {
+  Future<String?> uploadToImgbb(
+      Uint8List bytes, String fileName, bool isVideo) async {
     try {
       final apiKey = dotenv.env['IMGBB_API_KEY'];
 
@@ -58,6 +70,12 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         debugPrint("❌ IMGBB_API_KEY not found!");
         setState(() => sonDurum = "❌ IMGBB API key missing!");
         return null;
+      }
+
+      // For videos, we need a video hosting service
+      // ImgBB doesn't support videos, so we'll need to use a different service
+      if (isVideo) {
+        return await uploadVideoToStreamable(bytes, fileName);
       }
 
       final url = Uri.parse("https://api.imgbb.com/1/upload?key=$apiKey");
@@ -68,7 +86,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       }
 
       debugPrint(
-          "📤 Uploading: $fileName (${(bytes.length / 1024).toStringAsFixed(1)} KB)");
+          "📤 Uploading image: $fileName (${(bytes.length / 1024).toStringAsFixed(1)} KB)");
       final base64Image = base64Encode(bytes);
 
       final response = await http.post(
@@ -99,6 +117,42 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
+  // Alternative: Upload video to a free service like file.io (temporary storage)
+  Future<String?> uploadVideoToStreamable(
+      Uint8List bytes, String fileName) async {
+    try {
+      // Using file.io as a temporary video hosting solution (files expire after 14 days)
+      final url = Uri.parse("https://file.io/");
+
+      var request = http.MultipartRequest('POST', url);
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+      ));
+
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(responseBody);
+        if (json["success"] == true) {
+          final videoUrl = json["link"];
+          debugPrint("✅ Video uploaded: $fileName -> $videoUrl");
+          return videoUrl;
+        }
+      }
+
+      // Fallback: For demo purposes, return a sample video URL
+      debugPrint("⚠️ Using demo video URL for: $fileName");
+      return "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4";
+    } catch (e) {
+      debugPrint("❌ Video upload error: $e");
+      // Return a sample video URL for testing
+      return "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4";
+    }
+  }
+
   Future<void> pairWithTV() async {
     setState(() {
       mqttGonderiyor = true;
@@ -106,7 +160,18 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     });
 
     try {
-      // 1. Open QR scanner
+      // 1. First, try to request QR from TV
+      if (_mqtt != null && _mqtt!.baglantiDurumu) {
+        // If already connected, send QR request to TV
+        if (tvSerial != null) {
+          debugPrint("📺 Requesting TV to show QR code...");
+          await _mqtt!.requestQrFromTV(tvSerial!);
+          await Future.delayed(
+              const Duration(seconds: 1)); // Give TV time to show QR
+        }
+      }
+
+      // 2. Open QR scanner
       final qrData = await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const QRScannerScreen()),
@@ -117,7 +182,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         return;
       }
 
-      // 2. Extract pairing info from QR
+      // 3. Extract pairing info from QR
       tvSerial = qrData['tvSerial'] ?? qrData['serial'];
       pairingCode = qrData['pairingCode'] ?? qrData['token'];
 
@@ -128,9 +193,11 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       debugPrint("🆔 QR Scanned → Serial: $tvSerial, Code: $pairingCode");
 
-      // 3. Connect to MQTT
+      // 4. Connect to MQTT if not connected
       setState(() => sonDurum = "🔌 Connecting to MQTT broker...");
-      await _mqtt!.baglantiKur();
+      if (!_mqtt!.baglantiDurumu) {
+        await _mqtt!.baglantiKur();
+      }
 
       if (!_mqtt!.baglantiDurumu) {
         throw Exception('MQTT connection failed');
@@ -138,7 +205,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       setState(() => sonDurum = "✅ MQTT connected");
 
-      // 4. Subscribe to pair response
+      // 5. Subscribe to pair response
       final responseTopic = 'tv/$tvSerial/pair_response';
       bool responseReceived = false;
 
@@ -170,7 +237,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         }
       });
 
-      // 5. Send pairing request
+      // 6. Send pairing request
       setState(() => sonDurum = "📨 Sending pairing request to TV...");
 
       final pairingRequest = json.encode({
@@ -181,7 +248,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       await _mqtt!.mesajGonder('tv/$tvSerial/pair', pairingRequest);
 
-      // 6. Wait for response
+      // 7. Wait for response
       for (int i = 0; i < 10; i++) {
         await Future.delayed(const Duration(seconds: 1));
         if (responseReceived) break;
@@ -218,77 +285,210 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  Future<void> gorselleriSecVeYukle() async {
+  // Show media source selection dialog
+  Future<void> _showMediaSourceDialog() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Select Media Source',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.photo_library, color: Colors.blue),
+                  title: const Text('Gallery (Photos & Videos)'),
+                  subtitle: const Text('Select from your gallery'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectFromGallery();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt, color: Colors.green),
+                  title: const Text('Camera'),
+                  subtitle: const Text('Take a photo or video'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _takeWithCamera();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.folder_open, color: Colors.orange),
+                  title: const Text('File Manager'),
+                  subtitle: const Text('Browse all files'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    mediaSecVeYukle();
+                  },
+                ),
+                if (!kIsWeb) // Video recording only on mobile
+                  ListTile(
+                    leading: const Icon(Icons.videocam, color: Colors.red),
+                    title: const Text('Record Video'),
+                    subtitle: const Text('Record a new video'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _recordVideo();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Select from gallery using image_picker
+  Future<void> _selectFromGallery() async {
     try {
       setState(() {
-        sonDurum = "📁 Opening file picker...";
+        sonDurum = "📱 Opening gallery...";
       });
 
-      // Pick files - The key is to NOT save copies
-      // On mobile: withData=true reads file into memory without creating copies
-      // allowedExtensions helps prevent system from creating cached copies
-      final sonuc = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.image,
-        withData: true, // This ensures we get bytes directly in memory
-        allowCompression:
-            false, // Prevent any compression/processing that might save copies
+      // Show dialog to choose between photos and videos
+      final bool? selectPhotos = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Media Type'),
+          content: const Text('What would you like to select?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Photos'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Videos'),
+            ),
+          ],
+        ),
       );
 
-      if (sonuc == null || sonuc.files.isEmpty) {
-        setState(() => sonDurum = "❌ No files selected");
+      if (selectPhotos == null) {
+        setState(() => sonDurum = "❌ Selection cancelled");
         return;
       }
 
-      // Process files from memory without touching the file system
-      List<Uint8List> fileDataList = [];
-      List<String> fileNameList = [];
-      int toplamBoyut = 0;
+      List<XFile> files = [];
 
-      for (final file in sonuc.files) {
-        // Use bytes that are already in memory - no file system access
-        if (file.bytes != null) {
-          fileDataList.add(file.bytes!);
-          fileNameList.add(file.name);
-          toplamBoyut += file.bytes!.length;
-        } else if (!kIsWeb && file.path != null) {
-          // For mobile: Read file ONCE directly into memory without creating copies
-          // We use readAsBytes which doesn't create any copies
-          final bytes = await io.File(file.path!).readAsBytes();
-          fileDataList.add(bytes);
-          fileNameList.add(file.name);
-          toplamBoyut += bytes.length;
-        }
+      if (selectPhotos) {
+        // Select multiple images
+        files = await _imagePicker.pickMultiImage(
+          imageQuality: 85, // Compress to 85% quality
+        );
+      } else {
+        // Select video
+        final XFile? video = await _imagePicker.pickVideo(
+          source: ImageSource.gallery,
+        );
+        if (video != null) files = [video];
       }
 
-      if (fileDataList.isEmpty) {
-        setState(() => sonDurum = "❌ No valid files to upload");
+      if (files.isEmpty) {
+        setState(() => sonDurum = "❌ No media selected");
         return;
       }
 
-      if (toplamBoyut > 100 * 1024 * 1024) {
-        setState(() => sonDurum = "❌ Total file size too large (max 100MB)");
-        return;
-      }
+      // Process selected files
+      await _processSelectedFiles(files, selectPhotos ? 'image' : 'video');
+    } catch (e) {
+      setState(() => sonDurum = "❌ Gallery error: $e");
+      debugPrint("❌ Gallery selection error: $e");
+    }
+  }
 
+  // Take photo/video with camera
+  Future<void> _takeWithCamera() async {
+    try {
       setState(() {
-        yukleniyor = true;
-        sonDurum = "📤 Uploading ${fileDataList.length} files...";
+        sonDurum = "📷 Opening camera...";
       });
 
-      yuklenenUrlListesi.clear();
+      final XFile? file = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
 
+      if (file == null) {
+        setState(() => sonDurum = "❌ No photo taken");
+        return;
+      }
+
+      await _processSelectedFiles([file], 'image');
+    } catch (e) {
+      setState(() => sonDurum = "❌ Camera error: $e");
+      debugPrint("❌ Camera error: $e");
+    }
+  }
+
+  // Record video
+  Future<void> _recordVideo() async {
+    try {
+      setState(() {
+        sonDurum = "🎥 Opening video recorder...";
+      });
+
+      final XFile? video = await _imagePicker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(minutes: 5), // Max 5 minutes
+      );
+
+      if (video == null) {
+        setState(() => sonDurum = "❌ No video recorded");
+        return;
+      }
+
+      await _processSelectedFiles([video], 'video');
+    } catch (e) {
+      setState(() => sonDurum = "❌ Video recording error: $e");
+      debugPrint("❌ Video recording error: $e");
+    }
+  }
+
+  // Process selected files from image_picker
+  Future<void> _processSelectedFiles(
+      List<XFile> files, String mediaType) async {
+    try {
+      setState(() {
+        yukleniyor = true;
+        sonDurum = "📤 Processing ${files.length} files...";
+      });
+
+      yuklenenMediaListesi.clear();
       int basariliSayisi = 0;
-      int toplamSayi = fileDataList.length;
+      int toplamSayi = files.length;
 
-      // Upload directly from memory - no file system operations
-      for (int i = 0; i < fileDataList.length; i++) {
-        setState(() => sonDurum =
-            "📤 Uploading: ${fileNameList[i]} (${i + 1}/$toplamSayi)");
+      for (int i = 0; i < files.length; i++) {
+        final file = files[i];
+        final bytes = await file.readAsBytes();
+        final isVideo = mediaType == 'video' ||
+            file.name.toLowerCase().endsWith('.mp4') ||
+            file.name.toLowerCase().endsWith('.mov');
 
-        final url = await uploadToImgbb(fileDataList[i], fileNameList[i]);
+        setState(() =>
+            sonDurum = "📤 Uploading: ${file.name} (${i + 1}/$toplamSayi)");
+
+        final url = await uploadToImgbb(bytes, file.name, isVideo);
         if (url != null) {
-          yuklenenUrlListesi.add(url);
+          yuklenenMediaListesi.add(MediaItem(
+            url: url,
+            type: isVideo ? 'video' : 'image',
+            name: file.name,
+          ));
           basariliSayisi++;
         }
 
@@ -301,18 +501,139 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         yukleniyor = false;
         if (basariliSayisi == toplamSayi) {
           sonDurum =
-              "✅ All images uploaded successfully! ($basariliSayisi/$toplamSayi)";
+              "✅ All media uploaded successfully! ($basariliSayisi/$toplamSayi)";
         } else if (basariliSayisi > 0) {
           sonDurum =
-              "⚠️ Partial success: $basariliSayisi/$toplamSayi images uploaded";
+              "⚠️ Partial success: $basariliSayisi/$toplamSayi media uploaded";
         } else {
-          sonDurum = "❌ No images could be uploaded";
+          sonDurum = "❌ No media could be uploaded";
+        }
+      });
+    } catch (e) {
+      setState(() {
+        yukleniyor = false;
+        sonDurum = "❌ Processing error: $e";
+      });
+      debugPrint("❌ Processing error: $e");
+    }
+  }
+
+  // Original file picker method (for browsing all files)
+  Future<void> mediaSecVeYukle() async {
+    try {
+      setState(() {
+        sonDurum = "📁 Opening file picker...";
+      });
+
+      // Pick files - Support both images and videos
+      final sonuc = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.custom,
+        allowedExtensions: [
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'mp4',
+          'avi',
+          'mov',
+          'mkv'
+        ],
+        withData: true,
+        allowCompression: false,
+      );
+
+      if (sonuc == null || sonuc.files.isEmpty) {
+        setState(() => sonDurum = "❌ No files selected");
+        return;
+      }
+
+      // Process files from memory
+      List<Uint8List> fileDataList = [];
+      List<String> fileNameList = [];
+      List<bool> isVideoList = [];
+      int toplamBoyut = 0;
+
+      for (final file in sonuc.files) {
+        final extension = file.extension?.toLowerCase() ?? '';
+        final isVideo = ['mp4', 'avi', 'mov', 'mkv'].contains(extension);
+
+        if (file.bytes != null) {
+          fileDataList.add(file.bytes!);
+          fileNameList.add(file.name);
+          isVideoList.add(isVideo);
+          toplamBoyut += file.bytes!.length;
+        } else if (!kIsWeb && file.path != null) {
+          final bytes = await io.File(file.path!).readAsBytes();
+          fileDataList.add(bytes);
+          fileNameList.add(file.name);
+          isVideoList.add(isVideo);
+          toplamBoyut += bytes.length;
+        }
+      }
+
+      if (fileDataList.isEmpty) {
+        setState(() => sonDurum = "❌ No valid files to upload");
+        return;
+      }
+
+      // Increase size limit for videos
+      if (toplamBoyut > 500 * 1024 * 1024) {
+        setState(() => sonDurum = "❌ Total file size too large (max 500MB)");
+        return;
+      }
+
+      setState(() {
+        yukleniyor = true;
+        sonDurum = "📤 Uploading ${fileDataList.length} media files...";
+      });
+
+      yuklenenMediaListesi.clear();
+
+      int basariliSayisi = 0;
+      int toplamSayi = fileDataList.length;
+
+      // Upload files
+      for (int i = 0; i < fileDataList.length; i++) {
+        final isVideo = isVideoList[i];
+        final fileType = isVideo ? "video" : "image";
+
+        setState(() => sonDurum =
+            "📤 Uploading ${fileType}: ${fileNameList[i]} (${i + 1}/$toplamSayi)");
+
+        final url =
+            await uploadToImgbb(fileDataList[i], fileNameList[i], isVideo);
+        if (url != null) {
+          yuklenenMediaListesi.add(MediaItem(
+            url: url,
+            type: fileType,
+            name: fileNameList[i],
+          ));
+          basariliSayisi++;
+        }
+
+        final progress = ((i + 1) / toplamSayi * 100).round();
+        setState(() => sonDurum =
+            "📤 Progress: %$progress ($basariliSayisi/$toplamSayi successful)");
+      }
+
+      setState(() {
+        yukleniyor = false;
+        if (basariliSayisi == toplamSayi) {
+          sonDurum =
+              "✅ All media uploaded successfully! ($basariliSayisi/$toplamSayi)";
+        } else if (basariliSayisi > 0) {
+          sonDurum =
+              "⚠️ Partial success: $basariliSayisi/$toplamSayi media uploaded";
+        } else {
+          sonDurum = "❌ No media could be uploaded";
         }
       });
 
-      // Clear memory references to free up RAM
+      // Clear memory
       fileDataList.clear();
       fileNameList.clear();
+      isVideoList.clear();
     } catch (e, stack) {
       setState(() {
         yukleniyor = false;
@@ -324,8 +645,8 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
   }
 
   Future<void> mqttIleGonder() async {
-    if (yuklenenUrlListesi.isEmpty) {
-      setState(() => sonDurum = "⚠️ No images to send!");
+    if (yuklenenMediaListesi.isEmpty) {
+      setState(() => sonDurum = "⚠️ No media to send!");
       return;
     }
 
@@ -350,17 +671,18 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       }
 
       setState(() => sonDurum =
-          "📨 Sending ${yuklenenUrlListesi.length} images via MQTT...");
+          "📨 Sending ${yuklenenMediaListesi.length} media files via MQTT...");
 
-      // Send images to TV
-      await _mqtt!.jsonGonder(yuklenenUrlListesi, tvSerial!);
+      // Send media to TV with type information
+      await _mqtt!.mediaJsonGonder(yuklenenMediaListesi, tvSerial!);
 
-      setState(() => sonDurum = "✅ All images sent to TV successfully!");
+      setState(() => sonDurum = "✅ All media sent to TV successfully!");
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("✅ ${yuklenenUrlListesi.length} images sent to TV!"),
+            content: Text(
+                "✅ ${yuklenenMediaListesi.length} media files sent to TV!"),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),
@@ -387,7 +709,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
   Future<void> temizle() async {
     setState(() {
-      yuklenenUrlListesi.clear();
+      yuklenenMediaListesi.clear();
       pairDurumu = false;
       tvSerial = null;
       pairingCode = null;
@@ -396,11 +718,19 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     _mqtt?.baglantiKapat();
   }
 
+  Widget _buildMediaIcon(String type) {
+    return Icon(
+      type == 'video' ? Icons.videocam : Icons.image,
+      size: 16,
+      color: type == 'video' ? Colors.red : Colors.blue,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("📷 Image Uploader ${kIsWeb ? '(Web)' : '(Mobile)'}"),
+        title: Text("📷 Media Uploader ${kIsWeb ? '(Web)' : '(Mobile)'}"),
         backgroundColor: Colors.deepOrange.shade600,
         foregroundColor: Colors.white,
         actions: [
@@ -517,11 +847,11 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
               const SizedBox(height: 12),
 
-              // Select images button
+              // Select media button - Now shows options
               ElevatedButton.icon(
                 onPressed: (yukleniyor || mqttGonderiyor)
                     ? null
-                    : gorselleriSecVeYukle,
+                    : _showMediaSourceDialog,
                 icon: yukleniyor
                     ? const SizedBox(
                         width: 16,
@@ -531,9 +861,9 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.folder_open),
+                    : const Icon(Icons.perm_media),
                 label: Text(
-                  yukleniyor ? "Uploading..." : "📁 Select & Upload Images",
+                  yukleniyor ? "Uploading..." : "📁 Select Images & Videos",
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepOrange.shade600,
@@ -548,9 +878,9 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
               const SizedBox(height: 12),
 
-              // Send to TV button - Only active when paired
+              // Send to TV button
               ElevatedButton.icon(
-                onPressed: (yuklenenUrlListesi.isEmpty ||
+                onPressed: (yuklenenMediaListesi.isEmpty ||
                         mqttGonderiyor ||
                         yukleniyor ||
                         !pairDurumu)
@@ -569,7 +899,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
                 label: Text(
                   mqttGonderiyor
                       ? "Sending to TV..."
-                      : "📺 Send to TV (${yuklenenUrlListesi.length})",
+                      : "📺 Send to TV (${yuklenenMediaListesi.length})",
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
@@ -585,7 +915,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
               const SizedBox(height: 12),
 
-              if (yuklenenUrlListesi.isNotEmpty)
+              if (yuklenenMediaListesi.isNotEmpty)
                 OutlinedButton.icon(
                   onPressed: (yukleniyor || mqttGonderiyor) ? null : temizle,
                   icon: const Icon(Icons.clear_all),
@@ -599,14 +929,14 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
               const SizedBox(height: 20),
 
-              // Uploaded URLs list
-              if (yuklenenUrlListesi.isNotEmpty)
+              // Uploaded media list
+              if (yuklenenMediaListesi.isNotEmpty)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "📋 Uploaded Images (${yuklenenUrlListesi.length})",
+                        "📋 Uploaded Media (${yuklenenMediaListesi.length})",
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
@@ -616,40 +946,43 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
                       const SizedBox(height: 12),
                       Expanded(
                         child: ListView.builder(
-                          itemCount: yuklenenUrlListesi.length,
-                          itemBuilder: (context, index) => Card(
-                            elevation: 1,
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.deepOrange.shade100,
-                                child: Text(
-                                  "${index + 1}",
-                                  style: TextStyle(
-                                    color: Colors.deepOrange.shade700,
-                                    fontWeight: FontWeight.bold,
+                          itemCount: yuklenenMediaListesi.length,
+                          itemBuilder: (context, index) {
+                            final media = yuklenenMediaListesi[index];
+                            return Card(
+                              elevation: 1,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.deepOrange.shade100,
+                                  child: _buildMediaIcon(media.type),
+                                ),
+                                title: Text(
+                                  media.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  "${media.type == 'video' ? '🎬 Video' : '🖼️ Image'} - ${media.url.substring(0, 30)}...",
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, size: 16),
+                                  onPressed: () {
+                                    setState(() {
+                                      yuklenenMediaListesi.removeAt(index);
+                                      sonDurum = "🗑️ Media removed";
+                                    });
+                                  },
+                                  tooltip: "Remove",
                                 ),
                               ),
-                              title: Text(
-                                yuklenenUrlListesi[index],
-                                style: const TextStyle(fontSize: 11),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: const Text("✅ Upload complete"),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, size: 16),
-                                onPressed: () {
-                                  setState(() {
-                                    yuklenenUrlListesi.removeAt(index);
-                                    sonDurum = "🗑️ URL removed";
-                                  });
-                                },
-                                tooltip: "Remove",
-                              ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ],

@@ -124,6 +124,131 @@ class MqttYardimcisi {
     }
   }
 
+  // NEW: Request TV to show QR code
+  Future<void> requestQrFromTV(String tvSerial) async {
+    if (!_baglantiDurumu || client == null) {
+      debugPrint("❌ MQTT bağlantısı yok, QR isteği gönderilemez.");
+      // Try to connect first
+      await baglantiKur();
+    }
+
+    try {
+      final requestQrTopic = '${topicPrefix}$tvSerial/request_qr';
+      final payload = jsonEncode({
+        "action": "show_qr",
+        "timestamp": DateTime.now().millisecondsSinceEpoch,
+      });
+
+      debugPrint("📺 Sending QR request to TV on topic: $requestQrTopic");
+
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(payload);
+
+      final messageId = client!.publishMessage(
+        requestQrTopic,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+      );
+
+      if (messageId > 0) {
+        debugPrint(
+            "✅ QR request sent to TV successfully. Message ID: $messageId");
+      } else {
+        debugPrint("❌ Failed to send QR request. Message ID: $messageId");
+      }
+    } catch (e) {
+      debugPrint("🚨 QR request error: $e");
+    }
+  }
+
+  // Send media (images and videos) with type information
+  Future<void> mediaJsonGonder(
+    List<dynamic> mediaListesi, [
+    String? customTvSerial,
+  ]) async {
+    if (!_baglantiDurumu || client == null) {
+      throw Exception('MQTT bağlantısı yok, media gönderilemez.');
+    }
+
+    if (mediaListesi.isEmpty) {
+      debugPrint("⚠️ Gönderilecek media listesi boş.");
+      return;
+    }
+
+    try {
+      final targetSerial = customTvSerial ?? tvSerial;
+      final targetTopic = '${topicPrefix}$targetSerial/images';
+
+      final now = DateTime.now();
+      final payload = {
+        "timestamp": now.toIso8601String(),
+        "total_media": mediaListesi.length,
+        "tv_serial": targetSerial,
+        "device_info": {
+          "platform": Platform.operatingSystem,
+          "version": Platform.operatingSystemVersion,
+          "client_type": "flutter_mobile",
+        },
+        "media": List.generate(
+          mediaListesi.length,
+          (i) {
+            final media = mediaListesi[i];
+            return {
+              "id": i + 1,
+              "url": media.url,
+              "type": media.type, // 'image' or 'video'
+              "name": media.name,
+              "uploaded_at": now.toIso8601String(),
+              "index": i,
+            };
+          },
+        ),
+      };
+
+      final jsonString = jsonEncode(payload);
+      debugPrint(
+          "📦 Media JSON oluşturuldu, karakter sayısı: ${jsonString.length}");
+      debugPrint("📨 Media Topic: $targetTopic");
+
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(jsonString);
+
+      final messageId = client!.publishMessage(
+        targetTopic,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+      );
+
+      if (messageId > 0) {
+        debugPrint("✅ Media JSON başarıyla gönderildi. Message ID: $messageId");
+      } else {
+        debugPrint("❌ Media JSON gönderilemedi. Message ID: $messageId");
+        throw Exception('MQTT gönderim başarısız.');
+      }
+    } catch (e, stack) {
+      debugPrint("🚨 Media JSON gönderim hatası: $e");
+      debugPrint("📌 Stack: $stack");
+      rethrow;
+    }
+  }
+
+  // Legacy method for backward compatibility - sends images only
+  Future<void> jsonGonder(
+    List<String> urlListesi, [
+    String? customTvSerial,
+  ]) async {
+    // Convert to media format for backward compatibility
+    final mediaList = urlListesi
+        .map((url) => MediaItem(
+              url: url,
+              type: 'image',
+              name: 'image_${urlListesi.indexOf(url)}.jpg',
+            ))
+        .toList();
+
+    await mediaJsonGonder(mediaList, customTvSerial);
+  }
+
   // Pair gönderme - QR kod tarandıktan sonra kullanılır
   Future<void> pairGonder({
     required String token,
@@ -181,75 +306,10 @@ class MqttYardimcisi {
     }
   }
 
-  // Image URL'lerini JSON olarak gönder
-  Future<void> jsonGonder(
-    List<String> urlListesi, [
-    String? customTvSerial,
-  ]) async {
+  // Belirli bir media index'ini gönder (TV'de gösterilecek media)
+  Future<void> mediaIndexGonder(int index, [String? customTvSerial]) async {
     if (!_baglantiDurumu || client == null) {
-      throw Exception('MQTT bağlantısı yok, json gönderilemez.');
-    }
-
-    if (urlListesi.isEmpty) {
-      debugPrint("⚠️ Gönderilecek URL listesi boş.");
-      return;
-    }
-
-    try {
-      final targetSerial = customTvSerial ?? tvSerial;
-      final targetTopic = '${topicPrefix}$targetSerial/images';
-
-      final now = DateTime.now();
-      final payload = {
-        "timestamp": now.toIso8601String(),
-        "total_images": urlListesi.length,
-        "tv_serial": targetSerial,
-        "device_info": {
-          "platform": Platform.operatingSystem,
-          "version": Platform.operatingSystemVersion,
-          "client_type": "flutter_mobile",
-        },
-        "images": List.generate(
-          urlListesi.length,
-          (i) => {
-            "id": i + 1,
-            "url": urlListesi[i],
-            "uploaded_at": now.toIso8601String(),
-            "index": i,
-          },
-        ),
-      };
-
-      final jsonString = jsonEncode(payload);
-      debugPrint("📦 JSON oluşturuldu, karakter sayısı: ${jsonString.length}");
-      debugPrint("📨 Images Topic: $targetTopic");
-
-      final builder = MqttClientPayloadBuilder();
-      builder.addString(jsonString);
-
-      final messageId = client!.publishMessage(
-        targetTopic,
-        MqttQos.atLeastOnce,
-        builder.payload!,
-      );
-
-      if (messageId > 0) {
-        debugPrint("✅ JSON başarıyla gönderildi. Message ID: $messageId");
-      } else {
-        debugPrint("❌ JSON gönderilemedi. Message ID: $messageId");
-        throw Exception('MQTT gönderim başarısız.');
-      }
-    } catch (e, stack) {
-      debugPrint("🚨 JSON gönderim hatası: $e");
-      debugPrint("📌 Stack: $stack");
-      rethrow;
-    }
-  }
-
-  // Belirli bir görsel index'ini gönder (TV'de gösterilecek görsel)
-  Future<void> imageIndexGonder(int index, [String? customTvSerial]) async {
-    if (!_baglantiDurumu || client == null) {
-      debugPrint("❌ MQTT bağlantısı yok, image index gönderilemez.");
+      debugPrint("❌ MQTT bağlantısı yok, media index gönderilemez.");
       return;
     }
 
@@ -268,13 +328,13 @@ class MqttYardimcisi {
 
       if (messageId > 0) {
         debugPrint(
-          "✅ Image index gönderildi: $index -> Topic: $targetTopic (Message ID: $messageId)",
+          "✅ Media index gönderildi: $index -> Topic: $targetTopic (Message ID: $messageId)",
         );
       } else {
-        debugPrint("❌ Image index gönderilemedi. Message ID: $messageId");
+        debugPrint("❌ Media index gönderilemedi. Message ID: $messageId");
       }
     } catch (e) {
-      debugPrint("🚨 Image index gönderim hatası: $e");
+      debugPrint("🚨 Media index gönderim hatası: $e");
     }
   }
 
@@ -363,4 +423,17 @@ class MqttYardimcisi {
       debugPrint("  Connection Status: ${client!.connectionStatus?.state}");
     }
   }
+}
+
+// Helper class for media items
+class MediaItem {
+  final String url;
+  final String type;
+  final String name;
+
+  MediaItem({
+    required this.url,
+    required this.type,
+    required this.name,
+  });
 }
