@@ -160,9 +160,9 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     });
 
     try {
-      // 1. First, try to request QR from TV
+      // 1. qr ile bağlanmayı deniyor burada
       if (_mqtt != null && _mqtt!.baglantiDurumu) {
-        // If already connected, send QR request to TV
+        // bağlıysa qr isteği gönder
         if (tvSerial != null) {
           debugPrint("📺 Requesting TV to show QR code...");
           await _mqtt!.requestQrFromTV(tvSerial!);
@@ -171,7 +171,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         }
       }
 
-      // 2. Open QR scanner
+      // 2. qr okuyucusu açılıyor
       final qrData = await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const QRScannerScreen()),
@@ -182,7 +182,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         return;
       }
 
-      // 3. Extract pairing info from QR
+      // 3. qr'ın bağlantı durumu bilgileri
       tvSerial = qrData['tvSerial'] ?? qrData['serial'];
       pairingCode = qrData['pairingCode'] ?? qrData['token'];
 
@@ -193,7 +193,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       debugPrint("🆔 QR Scanned → Serial: $tvSerial, Code: $pairingCode");
 
-      // 4. Connect to MQTT if not connected
+      // 4. mqtt'ye bağlan tabi bağlı değilsen.
       setState(() => sonDurum = "🔌 Connecting to MQTT broker...");
       if (!_mqtt!.baglantiDurumu) {
         await _mqtt!.baglantiKur();
@@ -237,7 +237,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         }
       });
 
-      // 6. Send pairing request
+      // 6. eşleşme isteği gönder.
       setState(() => sonDurum = "📨 Sending pairing request to TV...");
 
       final pairingRequest = json.encode({
@@ -248,7 +248,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
 
       await _mqtt!.mesajGonder('tv/$tvSerial/pair', pairingRequest);
 
-      // 7. Wait for response
+      // 7. isteğe cevap bekliyor.
       for (int i = 0; i < 10; i++) {
         await Future.delayed(const Duration(seconds: 1));
         if (responseReceived) break;
@@ -285,7 +285,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  // Show media source selection dialog
+  // galeri fotoğraf ve video gösteren kısım
   Future<void> _showMediaSourceDialog() async {
     showModalBottomSheet(
       context: context,
@@ -352,14 +352,14 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     );
   }
 
-  // Select from gallery using image_picker
+  // galeriden görsel seçimi kısmı
   Future<void> _selectFromGallery() async {
     try {
       setState(() {
         sonDurum = "📱 Opening gallery...";
       });
 
-      // Show dialog to choose between photos and videos
+      // burada hem fotoğraf hem de video seçimi için kullanıcıya seçenek sunuyorum.
       final bool? selectPhotos = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -411,7 +411,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  // Take photo/video with camera
+  // kamer ile fotoğraf ve video çekme kısmı
   Future<void> _takeWithCamera() async {
     try {
       setState(() {
@@ -435,7 +435,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  // Record video
+  // video çekme kısmı
   Future<void> _recordVideo() async {
     try {
       setState(() {
@@ -459,7 +459,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  // Process selected files from image_picker
+  // image_picker'dan dosya seçimi
   Future<void> _processSelectedFiles(
       List<XFile> files, String mediaType) async {
     try {
@@ -518,14 +518,14 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
     }
   }
 
-  // Original file picker method (for browsing all files)
+  // Dosya açma ve yükleme kısmı
   Future<void> mediaSecVeYukle() async {
     try {
       setState(() {
         sonDurum = "📁 Opening file picker...";
       });
 
-      // Pick files - Support both images and videos
+      // desteklenen formatlar
       final sonuc = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
@@ -578,8 +578,8 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       }
 
       // Increase size limit for videos
-      if (toplamBoyut > 500 * 1024 * 1024) {
-        setState(() => sonDurum = "❌ Total file size too large (max 500MB)");
+      if (toplamBoyut > 200 * 1024 * 1024) {
+        setState(() => sonDurum = "❌ Total file size too large (max 200MB)");
         return;
       }
 
@@ -593,7 +593,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       int basariliSayisi = 0;
       int toplamSayi = fileDataList.length;
 
-      // Upload files
+      // dosyayı yükle
       for (int i = 0; i < fileDataList.length; i++) {
         final isVideo = isVideoList[i];
         final fileType = isVideo ? "video" : "image";
@@ -630,7 +630,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
         }
       });
 
-      // Clear memory
+      // hafızayı temizleme
       fileDataList.clear();
       fileNameList.clear();
       isVideoList.clear();
@@ -673,7 +673,7 @@ class _GorselYukleSayfasiState extends State<GorselYukleSayfasi> {
       setState(() => sonDurum =
           "📨 Sending ${yuklenenMediaListesi.length} media files via MQTT...");
 
-      // Send media to TV with type information
+      // medya gönderme kontrolü
       await _mqtt!.mediaJsonGonder(yuklenenMediaListesi, tvSerial!);
 
       setState(() => sonDurum = "✅ All media sent to TV successfully!");
