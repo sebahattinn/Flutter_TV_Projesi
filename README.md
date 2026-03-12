@@ -1,21 +1,21 @@
-# 📺 TV Image Receiver - Flutter & Android TV MQTT Communication
+#  TV Image Receiver - Flutter & Android TV MQTT Communication
 
 A real-time image sharing system that allows Flutter mobile apps to send images to Android TV using MQTT protocol. Perfect for displaying photos, presentations, or any visual content from your phone to your TV screen instantly.
 
-## 🎯 What This Project Does
+##  What This Project Does
 
-- **📱 Flutter Mobile App**: Capture, select, or upload images and send them to Android TV
-- **📺 Android TV App**: Receives and displays images in real-time on your TV screen
-- **🔄 MQTT Communication**: Uses lightweight MQTT protocol for real-time messaging
-- **🔗 Pairing System**: Secure device pairing between mobile and TV
-- **📸 Image Management**: Handles multiple images with indexing and control
+- ** Flutter Mobile App**: Capture, select, or upload images and send them to Android TV
+- ** Android TV App**: Receives and displays images in real-time on your TV screen
+- ** MQTT Communication**: Uses lightweight MQTT protocol for real-time messaging
+- ** Pairing System**: Secure device pairing between mobile and TV
+- ** Image Management**: Handles multiple images with indexing and control
 
-## 🏗️ How It Works
+##  How It Works
 
 ```mermaid
 graph LR
-    A[📱 Flutter App] -->|MQTT| B[☁️ MQTT Broker]
-    B -->|MQTT| C[📺 Android TV]
+    A[ Flutter App] -->|MQTT| B[ MQTT Broker]
+    B -->|MQTT| C[ Android TV]
     
     A -->|1. Pair Request| B
     B -->|1. Pair Request| C
@@ -33,16 +33,16 @@ graph LR
 4. **Display**: TV downloads and displays images
 5. **Control**: Mobile can control which image to show
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 tv-image-receiver/
-├── flutter_app/          # 📱 Flutter mobile application
+├── flutter_app/          #  Flutter mobile application
 │   ├── lib/
 │   ├── android/
 │   ├── ios/
 │   └── pubspec.yaml
-├── android_tv/           # 📺 Android TV application
+├── android_tv/           #  Android TV application
 │   ├── app/
 │   ├── build.gradle
 │   └── settings.gradle
@@ -50,7 +50,7 @@ tv-image-receiver/
 └── README.md
 ```
 
-## 🚀 Installation Guide
+##  Installation Guide
 
 ### Prerequisites
 
@@ -76,7 +76,7 @@ cd tv-image-receiver
 ls -la
 ```
 
-### Step 2: 📱 Flutter Mobile App Installation
+### Step 2:  Flutter Mobile App Installation
 
 #### 2.1 Navigate to Flutter App Directory
 ```bash
@@ -211,7 +211,7 @@ open -a "Android Studio" .
 4. **Run App**: Click green "Run" button or press Shift+F10
 5. **Select Target**: Choose your Android TV device from dropdown
 
-### Step 4: 🔧 Project Configuration
+### Step 4:  Project Configuration
 
 #### 4.1 Configure MQTT Settings
 
@@ -236,7 +236,7 @@ cd ../flutter_app
 flutter run
 ```
 
-### Step 5: 🧪 Testing the Installation
+### Step 5:  Testing the Installation
 
 #### 5.1 Verify Both Apps Are Running
 
@@ -272,7 +272,7 @@ flutter logs --verbose
 ping broker.hivemq.com
 ```
 
-### Step 6: 📦 Building for Production
+### Step 6:  Building for Production
 
 #### 6.1 Flutter Production Build
 
@@ -305,7 +305,7 @@ cd android_tv
 # app/build/outputs/apk/release/app-release.apk
 ```
 
-### Step 7: 🚀 Deployment
+### Step 7: Deployment
 
 #### 7.1 Install on Multiple Devices
 
@@ -326,9 +326,9 @@ adb install android_tv/app/build/outputs/apk/release/app-release.apk
 - **APK Direct Distribution** (enterprise/testing)
 - **Firebase App Distribution** (beta testing)
 
-## ⚙️ Configuration
+##  Configuration
 
-### 🔧 Environment Variables (.env)
+###  Environment Variables (.env)
 
 Create a `.env` file in the `flutter_app/` directory:
 
@@ -355,7 +355,7 @@ FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_API_KEY=your-api-key
 ```
 
-### 🔥 Firebase Configuration (firebase_options.dart)
+###  Firebase Configuration (firebase_options.dart)
 
 Create `flutter_app/lib/firebase_options.dart`:
 
@@ -427,13 +427,13 @@ class DefaultFirebaseOptions {
 }
 ```
 
-> **📝 Note**: To generate this file automatically, use FlutterFire CLI:
+> ** Note**: To generate this file automatically, use FlutterFire CLI:
 > ```bash
 > dart pub global activate flutterfire_cli
 > flutterfire configure
 > ```
 
-## 🔌 MQTT Topics Structure
+##  MQTT Topics Structure
 
 The application uses the following MQTT topic structure:
 
@@ -451,7 +451,7 @@ The application uses the following MQTT topic structure:
 - `tv/androidtv_001/images`
 - `tv/androidtv_001/image`
 
-## 📱 Usage
+##  Usage
 
 ### Mobile App
 1. **Launch** the Flutter app on your phone
@@ -468,23 +468,23 @@ The application uses the following MQTT topic structure:
 4. **View** images as they arrive
 5. **Navigate** through images via mobile control
 
-## 🛠️ Development
+##  Development
 
 ### Flutter App Features
-- 📸 Image capture and selection
-- ☁️ Cloud image upload
-- 🔄 Real-time MQTT communication
-- 📱 Responsive mobile UI
-- 🔗 Device pairing system
+-  Image capture and selection
+-  Cloud image upload
+-  Real-time MQTT communication
+-  Responsive mobile UI
+-  Device pairing system
 
 ### Android TV Features
-- 📺 TV-optimized interface
-- 🖼️ Full-screen image display
-- 📥 Automatic image downloading
-- 💾 Local image caching
-- 🎮 Remote control support
+-  TV-optimized interface
+-  Full-screen image display
+-  Automatic image downloading
+-  Local image caching
+-  Remote control support
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -508,7 +508,7 @@ The application uses the following MQTT topic structure:
 - Check Firebase project settings
 - Verify API keys and project ID
 
-## 📋 Requirements
+##  Requirements
 
 ### Flutter App
 - Flutter 3.0.0+
@@ -520,7 +520,7 @@ The application uses the following MQTT topic structure:
 - Android TV / Google TV
 - Network connectivity
 
-## 🤝 Contributing
+##  Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing-feature`)
@@ -528,11 +528,11 @@ The application uses the following MQTT topic structure:
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - **MQTT.org** for the messaging protocol
 - **HiveMQ** for free MQTT broker
@@ -541,4 +541,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Made with ❤️ for seamless mobile-to-TV communication**
+**Made with  for seamless mobile-to-TV communication**
